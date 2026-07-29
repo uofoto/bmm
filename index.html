@@ -1,9 +1,52 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // === ALAN ADI KİLİDİ (Domain Lock) ===
+    // Bu uygulama yalnızca Ümit Özgüler'in kendi alan adlarında ve yerel
+    // geliştirme/test ortamlarında çalışacak şekilde tasarlanmıştır. Kaynak
+    // kodu izinsiz kopyalanıp başka bir sunucuya/alan adına konursa, sayfa
+    // hiçbir içerik göstermeden tamamen boş kalır. Bkz. LICENSE ve
+    // Kullanım Şartları (Ayarlar > Uygulama Hakkında).
+    (function () {
+      var ALLOWED_HOSTS = ['umitozguler.com.tr'];
+      var DEV_HOSTS = ['localhost', '127.0.0.1', ''];
+      var host = window.location.hostname;
+
+      function isAllowedHost(h) {
+        if (DEV_HOSTS.indexOf(h) !== -1) return true;
+        for (var i = 0; i < ALLOWED_HOSTS.length; i++) {
+          var base = ALLOWED_HOSTS[i];
+          if (h === base || h.slice(-(base.length + 1)) === '.' + base) return true;
+        }
+        return false;
+      }
+
+      if (!isAllowedHost(host)) {
+        document.open();
+        document.write('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>');
+        document.close();
+      }
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Bursa Manevi Atlası — Ümit Özgüler</title>
+  <meta name="copyright" content="© 2026 Ümit Özgüler. Tüm Hakları Saklıdır.">
+  <meta name="author" content="Ümit Özgüler">
+
+  <!-- Sosyal medya paylaşım kartı (Facebook, WhatsApp, LinkedIn vb. bu etiketlerden okur; X kendi metnini ayrıca alır) -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.umitozguler.com.tr/bma/index.html">
+  <meta property="og:title" content="Bursa Manevi Atlası">
+  <meta property="og:description" content="Bursa'nın tarihi camilerini keşfet, ziyaretlerini kaydet ve manevi yolculuğunu paylaş: Bursa Manevi Atlası">
+  <meta property="og:image" content="https://www.umitozguler.com.tr/bma/icons/icon-512.png">
+  <meta property="og:site_name" content="Bursa Manevi Atlası">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Bursa Manevi Atlası">
+  <meta name="twitter:description" content="Bursa'nın tarihi camilerini keşfet, ziyaretlerini kaydet ve manevi yolculuğunu paylaş: Bursa Manevi Atlası">
+  <meta name="twitter:image" content="https://www.umitozguler.com.tr/bma/icons/icon-512.png">
 
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -32,8 +75,18 @@
   <!-- Leaflet (Manevi Harita özelliği için açık kaynak harita kütüphanesi) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <link rel="stylesheet" href="styles.css">
+
+  <!-- Google Analytics (GA4) — kullanım/aktif kullanıcı istatistikleri için -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-QW3FEBRP69"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-QW3FEBRP69');
+  </script>
 </head>
 <body class="min-h-screen flex flex-col select-none overflow-x-hidden">
   <div class="motif-bg" aria-hidden="true"></div>
@@ -43,15 +96,19 @@
     <div class="px-4 py-3.5 max-w-md mx-auto flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <div class="arch-badge w-10 h-10 transition-transform active:scale-95 relative overflow-hidden" style="background:var(--gold); color:var(--teal-950); border:2px solid var(--gold-soft);">
-          <span id="headerInitials" class="font-display font-bold text-xs tracking-tighter">ÜÖ</span>
+          <span id="headerInitials" class="font-display font-bold text-xs tracking-tighter"></span>
           <img id="headerProfileImg" class="hidden absolute inset-0 w-full h-full object-cover" src="" alt="Profil">
         </div>
         <div>
           <h1 class="font-bold text-sm leading-tight tracking-wide font-display" style="color:var(--gold-soft);">Bursa Manevi Atlası</h1>
-          <p class="text-[9px] uppercase tracking-widest font-semibold" style="color:rgba(231,212,160,0.65);">Seyyah: <span id="headerNameDisplay">Ümit Özgüler</span></p>
+          <p class="text-[9px] uppercase tracking-widest font-semibold" style="color:rgba(231,212,160,0.65);">Seyyah: <span id="headerNameDisplay">Ziyaretçi</span></p>
         </div>
       </div>
       <div class="flex items-center space-x-2">
+        <span id="offlineModeBadge" class="hidden text-[9px] px-2.5 py-1 rounded-full items-center space-x-1" style="background:rgba(167,160,142,0.16); border:1px solid rgba(167,160,142,0.4); color:var(--ink-faint);" title="İnternet bağlantısı yok — uygulama önbellekteki verilerle çalışıyor">
+          <i class="fa-solid fa-plane" style="font-size:8px;"></i>
+          <span class="font-medium">Çevrimdışı Mod</span>
+        </span>
         <span id="syncStatus" class="text-[9px] px-2.5 py-1 rounded-full flex items-center space-x-1" style="background:rgba(195,154,69,0.14); border:1px solid rgba(195,154,69,0.35); color:var(--gold-soft);">
           <span class="w-1.5 h-1.5 rounded-full animate-pulse" style="background:var(--gold);"></span>
           <span id="syncStatusText" class="font-medium">Hazırlanıyor...</span>
@@ -77,6 +134,22 @@
         <button id="installDismissBtn" class="text-[10px] px-1" style="color:var(--ink-faint);"><i class="fa-solid fa-xmark"></i></button>
       </div>
     </div>
+    <p class="text-[9.5px] text-center mt-1.5" style="color:var(--ink-faint);">Kurulum sırasında bir uyarı görürseniz endişelenmeyin, sadece Chrome'unuzu güncelleyin.</p>
+  </div>
+
+  <!-- iOS İÇİN "ANA EKRANA EKLE" TALİMAT BANDI -->
+  <div id="iosInstallBanner" class="hidden fixed top-16 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-md">
+    <div class="paper-card rounded-2xl px-4 py-3 shadow-lg" style="border:1px solid var(--gold-soft);">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-2.5">
+          <div class="arch-badge w-8 h-8 flex-shrink-0" style="background:var(--gold); color:var(--teal-950);">
+            <i class="fa-solid fa-share-from-square text-xs"></i>
+          </div>
+          <p class="text-[11px] font-semibold leading-tight" style="color:var(--ink);">Uygulama olarak yüklemek için: Paylaş &gt; Ana Ekrana Ekle</p>
+        </div>
+        <button id="iosInstallDismissBtn" class="text-[10px] px-1 flex-shrink-0" style="color:var(--ink-faint);"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
   </div>
 
   <!-- SPLASH -->
@@ -88,16 +161,16 @@
     </svg>
     <div class="arch-badge w-20 h-20 mb-6 overflow-hidden splash-logo-in" style="background:var(--gold); color:var(--teal-950); border:3px solid var(--gold-soft);">
       <img src="icons/icon-192.png" alt="Bursa Manevi Atlası Logo" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-      <span class="font-display font-bold text-2xl tracking-tighter" style="display:none; align-items:center; justify-content:center; width:100%; height:100%;">ÜÖ</span>
+      <span class="font-display font-bold text-2xl tracking-tighter" style="display:none; align-items:center; justify-content:center; width:100%; height:100%;"><i class="fa-solid fa-mosque"></i></span>
     </div>
-    <h2 class="text-xl font-bold font-display text-center tracking-wide fade-in-up" style="color:var(--gold-soft); animation-delay:.3s;">Bursa Manevi Atlası</h2>
-    <p class="text-[10px] uppercase tracking-widest mt-1 font-semibold fade-in-up" style="color:rgba(231,212,160,0.6); animation-delay:.48s;">Seyyah Defteri</p>
-    <div class="relative w-9 h-9 mt-10 fade-in-up" style="animation-delay:.68s;">
+    <h2 class="text-xl font-bold font-display text-center tracking-wide fade-in-up" style="color:var(--gold-soft); animation-delay:0s;">Bursa Manevi Atlası</h2>
+    <p class="text-[10px] uppercase tracking-widest mt-1 font-semibold fade-in-up" style="color:rgba(231,212,160,0.6); animation-delay:0s;">Seyyah Defteri</p>
+    <div class="relative w-9 h-9 mt-10 fade-in-up" style="animation-delay:0s;">
       <div class="absolute inset-0 rounded-full border-2" style="border-color:rgba(255,255,255,0.15);"></div>
       <div class="absolute inset-0 rounded-full border-2 animate-spin" style="border-color:var(--gold); border-top-color:transparent;"></div>
     </div>
-    <p class="font-medium text-xs mt-4 fade-in-up" style="color:rgba(231,212,160,0.55); animation-delay:.82s;">Kayıtlarınız hazırlanıyor...</p>
-    <p class="text-[9px] uppercase tracking-[0.2em] font-semibold absolute bottom-8 fade-in-up" style="color:rgba(231,212,160,0.4); animation-delay:1s;">Fikir ve Konsept — <a href="https://www.umitozguler.com.tr" target="_blank" rel="noopener" class="hover:underline" style="color:rgba(231,212,160,0.75);">Ümit Özgüler</a></p>
+    <p class="font-medium text-xs mt-4 fade-in-up" style="color:rgba(231,212,160,0.55); animation-delay:0s;">Kayıtlarınız hazırlanıyor...</p>
+    <p class="text-[9px] uppercase tracking-[0.2em] font-semibold absolute bottom-8 fade-in-up" style="color:rgba(231,212,160,0.4); animation-delay:0s;">Fikir ve Konsept — <a href="https://www.umitozguler.com.tr" target="_blank" rel="noopener" class="hover:underline" style="color:rgba(231,212,160,0.75);">Ümit Özgüler</a></p>
   </div>
 
   <!-- KAYDIRILABİLİR ANA ALAN -->
@@ -113,8 +186,39 @@
       <!-- PANEL 1: ANA SAYFA -->
       <div class="tab-panel px-4 pt-4 pb-8 overflow-y-auto max-h-[calc(100vh-8rem)] space-y-4">
 
+        <div id="backupReminderBanner" class="hidden paper-card rounded-2xl p-3.5 fade-in-up" style="border:1px solid rgba(195,154,69,0.4); background:rgba(195,154,69,0.08);">
+          <div class="flex items-start gap-2.5">
+            <div class="settings-icon flex-shrink-0" style="background:rgba(195,154,69,0.18); color:var(--gold-deep);"><i class="fa-solid fa-shield-halved"></i></div>
+            <div class="flex-1 min-w-0">
+              <p class="text-[11px] font-bold" style="color:var(--ink);">Kayıtların yedeklenmedi</p>
+              <p class="text-[9.5px] mt-0.5 leading-relaxed" style="color:var(--ink-soft);">Verilerin sadece bu tarayıcıda saklanıyor. Çerezler silinirse veya cihaz değişirse kayıtların kaybolabilir. Şimdi bir .json yedeği indir; ihtiyaç halinde Ayarlar &gt; "Yedekten Geri Yükle" ile tek dokunuşla geri getirebilirsin.</p>
+              <div class="flex items-center gap-2 mt-2">
+                <button onclick="exportBackup()" class="text-[10px] font-bold px-3 py-1.5 rounded-lg text-white flex-shrink-0" style="background:var(--teal-900);">Şimdi Yedekle</button>
+                <button onclick="dismissBackupReminder()" class="text-[10px] font-bold px-3 py-1.5 rounded-lg flex-shrink-0" style="background:var(--paper-deep); color:var(--ink-soft);">Şimdi Değil</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DEPOLAMA SAĞLIĞI UYARISI: gizli sekme / düşük kota / kalıcı olmayan
+             depolama tespit edildiğinde storage-health.js tarafından gösterilir. -->
+        <div id="storageHealthBanner" class="hidden paper-card rounded-2xl p-3.5 fade-in-up" style="border:1px solid rgba(168,86,49,0.4); background:rgba(168,86,49,0.08);">
+          <div class="flex items-start gap-2.5">
+            <div class="settings-icon flex-shrink-0" style="background:rgba(168,86,49,0.16); color:var(--brick);"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="flex-1 min-w-0">
+              <p class="text-[11px] font-bold" style="color:var(--ink);">Bu cihazda depolama alanı risk altında</p>
+              <p id="storageHealthBannerText" class="text-[9.5px] mt-0.5 leading-relaxed" style="color:var(--ink-soft);">Kontrol ediliyor...</p>
+              <div class="flex items-center gap-2 mt-2">
+                <button onclick="exportBackup()" class="text-[10px] font-bold px-3 py-1.5 rounded-lg text-white flex-shrink-0" style="background:var(--teal-900);">Şimdi Yedekle</button>
+                <button onclick="dismissStorageHealthBanner()" class="text-[10px] font-bold px-3 py-1.5 rounded-lg flex-shrink-0" style="background:var(--paper-deep); color:var(--ink-soft);">Anladım</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
         <div class="hero-panel text-white rounded-3xl p-5 relative overflow-hidden pop-in">
-          <svg class="arch-watermark" width="130" height="130" viewBox="0 0 100 100" fill="none">
+          <svg class="arch-watermark" width="130" height="130" viewBox="0 0 100 100" fill="none" style="pointer-events:none;">
             <path d="M20 90 V45 A30 30 0 0 1 80 45 V90" stroke="#E7D4A0" stroke-width="2"/>
             <path d="M32 90 V50 A18 18 0 0 1 68 50 V90" stroke="#E7D4A0" stroke-width="1.4"/>
           </svg>
@@ -135,7 +239,13 @@
             </div>
             <div>
               <h2 class="text-lg font-light leading-none" style="color:rgba(255,255,255,0.85);">Hoş geldiniz,</h2>
-              <p id="heroNameDisplay" class="text-2xl font-bold font-display tracking-wide mt-1">Ümit Özgüler</p>
+              <p class="flex items-center gap-2 mt-1">
+                <span id="heroNameDisplay" class="text-2xl font-bold font-display tracking-wide">Ziyaretçi</span>
+                <span id="heroBadgeIcon" class="hidden text-xl leading-none" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35));"></span>
+              </p>
+              <p id="heroPersonalizeHint" class="hidden text-[10.5px] mt-1.5 leading-snug font-semibold flex items-center gap-1.5" style="color:var(--gold-soft);">
+                <i class="fa-solid fa-circle-info"></i><span>Profil kısmında uygulamayı kişiselleştirebilirsin.</span>
+              </p>
               <p id="totalCountInfoText" class="text-[11px] mt-1.5 leading-relaxed font-light" style="color:rgba(255,255,255,0.72);">
                 Bursa'nın tüm ilçelerindeki tescilli tarihi cami ve mescidleri ihya etme yolculuğun.
               </p>
@@ -158,6 +268,19 @@
           </div>
         </div>
 
+        <!-- UYGULAMA GÜNCELLEMESİ MEVCUT (sunucudaki version.json cihazdakinden farklıysa görünür) -->
+        <div id="appUpdateBanner" class="hidden rounded-2xl p-4 flex items-center gap-3" style="background:rgba(195,154,69,0.14); border:1px solid rgba(195,154,69,0.4);">
+          <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style="background:var(--gold-deep); color:#fff;">
+            <i class="fa-solid fa-arrows-rotate text-[13px]"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-[11.5px] font-bold" style="color:var(--ink);">Yeni bir güncelleme mevcut</p>
+            <p class="text-[10px] leading-snug" style="color:var(--ink-soft);">Yeni eklenen camiler ve son bilgiler için uygulamayı güncelle. Kayıtların etkilenmez.</p>
+          </div>
+          <button onclick="applyAppUpdate()" class="text-[10.5px] font-bold px-3 py-2 rounded-xl text-white flex-shrink-0" style="background:var(--teal-900);">Güncelle</button>
+          <button onclick="dismissAppUpdateBanner()" class="icon-btn flex-shrink-0" style="color:var(--ink-faint); width:22px; height:22px;" title="Kapat"><i class="fa-solid fa-xmark text-[10px]"></i></button>
+        </div>
+
         <!-- YENİLİKLER (Son Güncellemeler Bildirimi) -->
         <div id="whatsNewBanner" class="hidden rounded-2xl p-4 space-y-2.5 relative overflow-hidden" style="background:rgba(21,90,76,0.07); border:1px solid rgba(21,90,76,0.22);">
           <div class="flex items-start justify-between gap-2">
@@ -167,37 +290,7 @@
             </h3>
             <button onclick="dismissWhatsNewBanner()" class="icon-btn flex-shrink-0" style="color:var(--ink-faint); width:24px; height:24px;" title="Kapat"><i class="fa-solid fa-xmark text-[11px]"></i></button>
           </div>
-          <div class="space-y-2" id="whatsNewList">
-            <div id="whatsNewMosqueEntry"></div>
-            <div class="flex items-start gap-2.5">
-              <span class="text-base leading-none mt-0.5">🕌</span>
-              <div class="min-w-0">
-                <p class="text-[11px] font-bold" style="color:var(--ink);">Her Açılışta Farklı Öneri</p>
-                <p class="text-[10px] leading-snug" style="color:var(--ink-soft);">"Bugün Bursa'da" kartı artık uygulamayı her açtığında rastgele bir cami öneriyor, art arda aynı camiyi göstermiyor.</p>
-              </div>
-            </div>
-            <div class="flex items-start gap-2.5">
-              <span class="text-base leading-none mt-0.5">📡</span>
-              <div class="min-w-0">
-                <p class="text-[11px] font-bold" style="color:var(--ink);">Çevrimdışı Kullanım İyileştirildi</p>
-                <p class="text-[10px] leading-snug" style="color:var(--ink-soft);">Uygulama artık internetsizken de daha güvenilir açılıyor; hava durumu bilgisi her gün doğru şekilde güncelleniyor.</p>
-              </div>
-            </div>
-            <div class="flex items-start gap-2.5">
-              <span class="text-base leading-none mt-0.5">♻️</span>
-              <div class="min-w-0">
-                <p class="text-[11px] font-bold" style="color:var(--ink);">Silinen Camiler Onarıldı</p>
-                <p class="text-[10px] leading-snug" style="color:var(--ink-soft);">Kendi eklediğin camileri sildiğinde de artık "Silinen Camiler" listesinden geri getirebilirsin.</p>
-              </div>
-            </div>
-            <div class="flex items-start gap-2.5">
-              <span class="text-base leading-none mt-0.5">📖</span>
-              <div class="min-w-0">
-                <p class="text-[11px] font-bold" style="color:var(--ink);">Günün Namaz Ayeti</p>
-                <p class="text-[10px] leading-snug" style="color:var(--ink-soft);">Ana sayfadaki "Günün Ayeti" kartı, içeriğini daha net yansıtmak için "Günün Namaz Ayeti" olarak yeniden adlandırıldı.</p>
-              </div>
-            </div>
-          </div>
+          <div class="space-y-2" id="whatsNewList"></div>
         </div>
 
         <!-- SONRAKİ NAMAZ VAKTİNE KALAN SÜRE -->
@@ -453,8 +546,25 @@
 
           <form id="visitForm" class="space-y-3.5" onsubmit="handleVisitSubmit(event)">
             <div class="space-y-1">
-              <label class="block text-[10px] font-bold uppercase tracking-wider" style="color:var(--ink-faint);">Cami / Mescid Seçimi *</label>
-              <select id="formMosqueSelect" class="field w-full rounded-xl px-3 py-2.5 text-xs" onchange="toggleCustomMosqueInput()" required></select>
+              <div class="flex items-center justify-between gap-2">
+                <label class="block text-[10px] font-bold uppercase tracking-wider" style="color:var(--ink-faint);">Cami / Mescid Seçimi *</label>
+                <button type="button" id="btnToggleOutOfBursa" onclick="toggleOutOfBursaMode()" class="text-[9px] font-bold shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full" style="color:var(--brick-deep); background:rgba(168,86,49,0.08); border:1px solid var(--brick-soft);">
+                  <i class="fa-solid fa-earth-europe"></i><span>Bursa Dışında Ziyaret Ettim</span>
+                </button>
+              </div>
+              <div id="mosqueSelectFieldWrap">
+                <select id="formMosqueSelect" class="field w-full rounded-xl px-3 py-2.5 text-xs" onchange="toggleCustomMosqueInput()" required></select>
+              </div>
+            </div>
+
+            <div id="outOfBursaSection" class="hidden space-y-2.5 p-3 rounded-xl" style="background:rgba(21,90,76,0.08); border:1px solid rgba(21,90,76,0.3);">
+              <div class="flex items-center justify-between">
+                <h4 class="text-[10px] font-bold uppercase flex items-center gap-1.5" style="color:var(--teal-800);"><i class="fa-solid fa-earth-europe"></i>Bursa Dışı Tarihi Cami</h4>
+                <button type="button" onclick="toggleOutOfBursaMode(false)" class="text-[9px] font-bold underline underline-offset-2" style="color:var(--ink-faint);">Vazgeç</button>
+              </div>
+              <input id="formOutOfBursaCity" type="text" placeholder="Şehir / İl Adı * (örn. İstanbul)" class="w-full rounded-xl px-3 py-2 text-xs" style="border:1px solid var(--line); background:var(--paper-card); color:var(--ink);">
+              <input id="formOutOfBursaName" type="text" placeholder="Cami veya Mescid Adı *" class="w-full rounded-xl px-3 py-2 text-xs" style="border:1px solid var(--line); background:var(--paper-card); color:var(--ink);">
+              <p class="text-[9px]" style="color:var(--ink-faint);">Namaz vakti, adres/konum, tarih-saat, notlar ve fotoğraf alanlarını aşağıdan aynı şekilde doldurabilirsiniz.</p>
             </div>
 
             <div id="customMosqueSection" class="hidden space-y-2.5 p-3 rounded-xl" style="background:rgba(195,154,69,0.08); border:1px solid rgba(195,154,69,0.3);">
@@ -486,13 +596,15 @@
 
             <div class="space-y-1">
               <label class="block text-[10px] font-bold uppercase tracking-wider" style="color:var(--ink-faint);">Kılınan Namaz Vakti *</label>
-              <div class="grid grid-cols-5 gap-1">
+              <div class="grid grid-cols-3 gap-1">
                 <button type="button" onclick="selectPrayer('Sabah')" id="btn-p-Sabah" class="prayer-btn text-[10px] font-semibold py-2 rounded-xl">Sabah</button>
                 <button type="button" onclick="selectPrayer('Öğle')" id="btn-p-Öğle" class="prayer-btn text-[10px] font-semibold py-2 rounded-xl">Öğle</button>
                 <button type="button" onclick="selectPrayer('İkindi')" id="btn-p-İkindi" class="prayer-btn text-[10px] font-semibold py-2 rounded-xl">İkindi</button>
                 <button type="button" onclick="selectPrayer('Akşam')" id="btn-p-Akşam" class="prayer-btn text-[10px] font-semibold py-2 rounded-xl">Akşam</button>
                 <button type="button" onclick="selectPrayer('Yatsı')" id="btn-p-Yatsı" class="prayer-btn text-[10px] font-semibold py-2 rounded-xl">Yatsı</button>
+                <button type="button" onclick="selectPrayer('Vakit Dışı')" id="btn-p-Vakit Dışı" class="prayer-btn vakit-disi-btn text-[10px] font-semibold py-2 rounded-xl">Vakit Dışı</button>
               </div>
+              <p class="text-[9.5px] font-bold" style="color:var(--brick-deep);"><i class="fa-solid fa-triangle-exclamation" style="font-size:8px;"></i> Vakit Dışı: kaza, şükür vb. beş vakit dışında kılınan namazlar için.</p>
               <input type="hidden" id="formPrayerSelected" required>
             </div>
 
@@ -571,15 +683,39 @@
 
         <!-- DEFTER / İSTATİSTİK SEKME SEÇİCİ -->
         <div class="grid grid-cols-2 gap-1 p-1 rounded-2xl" style="background:var(--paper-deep);">
-          <button id="defterViewBtn" onclick="switchDefterView('defter')" class="segment-tab active text-[11px] font-bold py-2 rounded-xl">
+          <button id="defterViewBtn" onclick="switchDefterView('defter'); document.getElementById('statsShareBtnWrap').classList.add('hidden');" class="segment-tab active text-[11px] font-bold py-2 rounded-xl">
             <i class="fa-solid fa-scroll mr-1"></i> Defter
           </button>
-          <button id="statsViewBtn" onclick="switchDefterView('stats')" class="segment-tab text-[11px] font-bold py-2 rounded-xl" style="color:var(--ink-soft);">
+          <button id="statsViewBtn" onclick="switchDefterView('stats'); document.getElementById('statsShareBtnWrap').classList.remove('hidden');" class="segment-tab text-[11px] font-bold py-2 rounded-xl" style="color:var(--ink-soft);">
             <i class="fa-solid fa-chart-pie mr-1"></i> İstatistik
           </button>
         </div>
 
+        <!-- İSTATİSTİKLERİNİ PAYLAŞ / PDF İNDİR BUTONLARI (yalnızca İstatistik sekmesinde görünür) -->
+        <div id="statsShareBtnWrap" class="hidden grid grid-cols-2 gap-2">
+          <button onclick="shareMyStats()" class="flex items-center justify-center gap-2 rounded-2xl py-2.5 text-[11.5px] font-bold text-white" style="background:var(--teal-900); border:1px solid rgba(21,90,76,0.3);" title="İstatistiklerini sosyal medyada paylaş">
+            <i class="fa-solid fa-chart-simple text-[11px]"></i>
+            <span>Paylaş</span>
+          </button>
+          <button onclick="downloadStatsPDF()" class="flex items-center justify-center gap-2 rounded-2xl py-2.5 text-[11.5px] font-bold" style="background:var(--paper-card); color:var(--teal-900); border:1px solid rgba(21,90,76,0.3);" title="İstatistiklerini ve kılınmış cami listesini PDF olarak indir">
+            <i class="fa-solid fa-file-pdf text-[11px]"></i>
+            <span>PDF İndir</span>
+          </button>
+        </div>
+
         <div id="historyFeed" class="space-y-3.5"></div>
+
+        <!-- BURSA DIŞI ZİYARETLER (Bursa defterinden ayrı, kendi bölümü) -->
+        <div id="outOfBursaSectionWrap" class="hidden space-y-3 pt-3">
+          <div class="flex items-center justify-between pb-1" style="border-top:1px dashed var(--line); padding-top:14px;">
+            <h3 class="text-[12.5px] font-bold flex items-center space-x-2 font-display" style="color:var(--ink-soft);">
+              <i class="fa-solid fa-earth-europe" style="color:var(--teal-700);"></i>
+              <span>Bursa Dışı Ziyaretlerim</span>
+            </h3>
+            <span id="outOfBursaTotalCount" class="text-[10px] font-bold px-2 py-0.5 rounded-full font-ledger" style="background:rgba(21,90,76,0.1); color:var(--teal-900);">0 Kayıt</span>
+          </div>
+          <div id="outOfBursaFeed" class="space-y-3.5"></div>
+        </div>
 
         <!-- İSTATİSTİK PANELİ -->
         <div id="statsPanel" class="hidden space-y-4"></div>
@@ -592,8 +728,8 @@
         <div id="ownProfileHintBanner" class="hidden items-start space-x-2.5 rounded-2xl p-3.5" style="background:rgba(197,161,84,0.14); border:1px solid var(--gold);">
           <i class="fa-solid fa-circle-exclamation mt-0.5" style="color:var(--teal-900);"></i>
           <div class="flex-1">
-            <p class="text-[11px] font-bold" style="color:var(--ink);">Bu profil örnek olarak gösteriliyor</p>
-            <p class="text-[10px] mt-0.5 leading-snug" style="color:var(--ink-soft);">"Ümit Özgüler", uygulamanın fikir sahibidir — sizin hesabınız değildir. Aşağıdan kendi isminizi yazıp fotoğrafınızı ekleyerek profilinizi kişiselleştirin.</p>
+            <p class="text-[11px] font-bold" style="color:var(--ink);">Profilini henüz kişiselleştirmedin</p>
+            <p class="text-[10px] mt-0.5 leading-snug" style="color:var(--ink-soft);">Aşağıdan kendi isminizi yazıp fotoğrafınızı ekleyerek profilinizi kişiselleştirin.</p>
           </div>
           <button onclick="dismissOwnProfileHint()" class="text-[11px] px-1" style="color:var(--ink-faint);" title="Kapat">
             <i class="fa-solid fa-xmark"></i>
@@ -606,7 +742,7 @@
           <div class="relative w-20 h-20 mx-auto">
             <input type="file" id="profilePhotoInput" accept="image/*,.heic,.heif" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="handleProfilePhotoUpload(this)" title="Profil fotoğrafı seç">
             <div class="w-full h-full rounded-full flex items-center justify-center text-2xl shadow-md font-display font-bold overflow-hidden relative" style="background:var(--gold-soft); color:var(--teal-950); border:2px solid var(--gold);">
-              <span id="profileInitials">ÜÖ</span>
+              <span id="profileInitials"></span>
               <img id="profilePhotoImg" class="hidden absolute inset-0 w-full h-full object-cover" src="" alt="Profil">
             </div>
             <!-- Kamera İkonu -->
@@ -617,19 +753,30 @@
 
           <!-- Dinamik İsim Girişi -->
           <div class="px-4">
-            <input type="text" id="profileNameInput" value="Ümit Özgüler" placeholder="İsminizi girin..." class="w-full text-center font-bold text-lg font-display bg-transparent border-b border-dashed hover:border-[var(--line)] focus:border-[var(--gold)] transition-colors py-1 outline-none" style="color:var(--ink); border-color:transparent;" onchange="saveProfileName(this.value)">
+            <input type="text" id="profileNameInput" value="" placeholder="İsminizi girin..." class="w-full text-center font-bold text-lg font-display bg-transparent border-b border-dashed hover:border-[var(--line)] focus:border-[var(--gold)] transition-colors py-1 outline-none" style="color:var(--ink); border-color:transparent;" onchange="saveProfileName(this.value)">
             <p class="text-[10px] font-semibold uppercase tracking-widest mt-1" style="color:var(--teal-700);">Bursa Miras Seyyahı</p>
           </div>
 
           <div class="rounded-xl p-3 text-[10px] text-left space-y-1.5" style="background:var(--paper-deep);">
             <p class="flex justify-between"><strong style="color:var(--ink);">Kayıt Modu:</strong> <span id="appModeBadge" class="font-bold" style="color:var(--teal-700);">Yükleniyor...</span></p>
-            <p class="flex justify-between"><strong style="color:var(--ink);">Kullanıcı:</strong> <span id="profileStatsName" class="font-bold truncate max-w-[120px] text-right" style="color:var(--ink);">Ümit Özgüler</span></p>
+            <p class="flex justify-between"><strong style="color:var(--ink);">Kullanıcı:</strong> <span id="profileStatsName" class="font-bold truncate max-w-[120px] text-right" style="color:var(--ink);">Ziyaretçi</span></p>
             <p class="flex justify-between"><strong style="color:var(--ink);">Sürüm:</strong> <span class="font-ledger" style="color:var(--ink-faint);">v6.0 — Cihazda Kalıcı Kayıt</span></p>
           </div>
         </div>
 
         <div class="paper-card rounded-3xl p-4 space-y-1">
           <h4 class="font-bold text-[10px] pb-2 uppercase tracking-wider" style="color:var(--ink-faint); border-bottom:1px solid var(--line);">Uygulama Ayarları</h4>
+
+          <div class="settings-row">
+            <div class="flex items-center space-x-2.5">
+              <div class="settings-icon" style="background:rgba(195,154,69,0.14); color:var(--gold-deep);"><i class="fa-solid fa-arrows-rotate"></i></div>
+              <div>
+                <p class="text-[11px] font-bold" style="color:var(--ink);">Güncellemeleri Kontrol Et</p>
+                <p class="text-[9.5px]" style="color:var(--ink-faint);">En güncel cami ve bilgi listesini kontrol et</p>
+              </div>
+            </div>
+            <button onclick="checkForAppUpdate(true)" class="text-[10px] font-bold px-3 py-1.5 rounded-lg flex-shrink-0" style="background:var(--paper-deep); color:var(--ink-soft);">Kontrol Et</button>
+          </div>
 
           <div class="settings-row">
             <div class="flex items-center space-x-2.5">
@@ -655,10 +802,21 @@
 
           <div class="settings-row" style="border-top:1px solid var(--line);">
             <div class="flex items-center space-x-2.5">
+              <div class="settings-icon" id="storageHealthIcon" style="background:rgba(21,90,76,0.1); color:var(--teal-900);"><i class="fa-solid fa-hard-drive"></i></div>
+              <div>
+                <p class="text-[11px] font-bold" style="color:var(--ink);">Depolama Durumu</p>
+                <p id="storageHealthInfo" class="text-[9.5px] font-bold mt-0.5" style="color:var(--ink-faint);">Kontrol ediliyor...</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-row" style="border-top:1px solid var(--line);">
+            <div class="flex items-center space-x-2.5">
               <div class="settings-icon" style="background:rgba(168,86,49,0.1); color:var(--brick);"><i class="fa-solid fa-cloud-arrow-down"></i></div>
               <div>
                 <p class="text-[11px] font-bold" style="color:var(--ink);">Yedeğini Dışa Aktar</p>
                 <p class="text-[9.5px]" style="color:var(--ink-faint);">Tüm kayıtları .json dosyasına indir</p>
+                <p id="lastBackupInfo" class="text-[9px] font-bold mt-0.5" style="color:var(--gold-deep);">Henüz hiç yedeklenmedi</p>
               </div>
             </div>
             <button onclick="exportBackup()" class="text-[10px] font-bold px-3 py-1.5 rounded-lg text-white flex-shrink-0" style="background:var(--teal-900);">İndir</button>
@@ -714,14 +872,14 @@
             </div>
             <div class="flex items-start space-x-2.5 text-[11px]">
               <span class="sicil-tag min-w-[76px] text-center" style="color:var(--teal-700);">Türbedar</span>
-              <p style="color:var(--ink-soft);">Bursa genelinde 5 farklı tarihi camide ibadet etmiş kişi.</p>
+              <p style="color:var(--ink-soft);">Bursa genelinde 10 farklı tarihi camide ibadet etmiş kişi.</p>
             </div>
             <div class="flex items-start space-x-2.5 text-[11px]">
               <span class="sicil-tag min-w-[76px] text-center" style="color:var(--brick-deep);">Mihrap</span>
               <p style="color:var(--ink-soft);">Bir ilçedeki tüm tescilli tarihi camileri tamamlayan (Mihrap Fatihi).</p>
             </div>
             <div class="flex items-start space-x-2.5 text-[11px]">
-              <span class="sicil-tag min-w-[76px] text-center" style="color:var(--gold-deep);">Fatih 👑</span>
+              <span class="sicil-tag min-w-[76px] text-center flex items-center justify-center gap-1" style="color:var(--gold-deep);">Fatih <svg width="14" height="14" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="18" fill="none" stroke="#C39A45" stroke-width="2"/><circle cx="20" cy="20" r="14" fill="#8C6A22"/><path d="M23 12a9 9 0 1 0 0 16 7.2 7.2 0 1 1 0-16Z" fill="#F4E4B8"/><path d="M27.2 17.6l.9 1.9 2.1.3-1.5 1.45.35 2.05-1.85-.97-1.85.97.35-2.05-1.5-1.45 2.1-.3Z" fill="#F4E4B8"/></svg></span>
               <p style="color:var(--ink-soft);">Envanterdeki tüm tescilli tarihi mabet ve mescidlerin tamamını tamamlayan baş seyyah (Bursa Fatihi).</p>
             </div>
           </div>
@@ -742,6 +900,12 @@
               <p class="text-[9.5px] pt-0.5" style="color:var(--ink-faint);">Fikir, Konsept ve Proje Sahibi:
                 <a href="https://www.umitozguler.com.tr" target="_blank" rel="noopener" class="font-semibold underline decoration-dotted underline-offset-2" style="color:var(--ink-soft);">Ümit Özgüler <i class="fa-solid fa-arrow-up-right-from-square text-[7px]"></i></a>
               </p>
+              <p class="text-[9px] pt-1.5" style="color:var(--ink-faint); border-top:1px solid var(--line); margin-top:0.35rem;">© 2026 Ümit Özgüler. Tüm Hakları Saklıdır.</p>
+              <p class="text-[8.5px] leading-relaxed" style="color:var(--ink-faint);">Bu uygulamanın tasarımı, konsepti, kaynak kodu ve içeriği telif hakkı ile korunmaktadır. Ümit Özgüler'in yazılı izni olmaksızın kısmen veya tamamen çoğaltılamaz, kopyalanamaz, dağıtılamaz, değiştirilerek veya değiştirilmeden başka bir ad altında yayımlanamaz ya da ticari/ticari olmayan hiçbir amaçla kullanılamaz.</p>
+              <button onclick="openTermsModal()" class="text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 mt-1" style="background:var(--paper-deep); color:var(--ink-soft);">
+                <i class="fa-solid fa-file-contract text-[9px]" style="color:var(--gold-deep);"></i><span>Kullanım Şartlarını Oku / Terms of Use</span>
+              </button>
+              <p class="text-[8.5px] font-ledger pt-1" style="color:var(--ink-faint);">Uygulama Sürümü: <span id="appVersionBadge">—</span></p>
             </div>
           </div>
         </div>
@@ -945,6 +1109,121 @@
         <button onclick="closeDeletedMosquesModal()" class="icon-btn" style="color:var(--ink-faint);"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div id="deletedMosquesList" class="space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- KULLANIM ŞARTLARI / TERMS OF USE -->
+  <div id="termsModal" class="hidden fixed inset-0 z-50 flex flex-col" style="background:var(--paper);">
+    <div class="hero-panel relative px-4 pt-4 pb-3 flex-shrink-0 safe-padding-top">
+      <div class="relative flex items-start justify-between">
+        <div class="space-y-1">
+          <h3 class="font-display font-bold text-base leading-snug flex items-center gap-2" style="color:#fff;">
+            <i class="fa-solid fa-file-contract" style="color:var(--gold-soft);"></i><span>Kullanım Şartları</span>
+          </h3>
+          <p class="text-[10.5px]" style="color:rgba(255,255,255,0.75);">Son güncelleme: 19 Temmuz 2026</p>
+        </div>
+        <button onclick="closeTermsModal()" class="icon-btn flex-shrink-0" style="background:rgba(255,255,255,0.14); color:#fff;"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="grid grid-cols-2 gap-1 p-1 rounded-2xl mt-3" style="background:rgba(255,255,255,0.1);">
+        <button id="termsLangTrBtn" onclick="switchTermsLang('tr')" class="segment-tab active text-[11px] font-bold py-2 rounded-xl">Türkçe</button>
+        <button id="termsLangEnBtn" onclick="switchTermsLang('en')" class="segment-tab text-[11px] font-bold py-2 rounded-xl" style="color:rgba(255,255,255,0.8);">English</button>
+      </div>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-4 py-4 safe-padding-bottom">
+      <!-- TÜRKÇE İÇERİK (esas metin) -->
+      <div id="termsContentTr" class="space-y-4">
+        <div class="paper-card rounded-2xl p-3.5">
+          <p class="text-[10px]" style="color:var(--ink-faint);"><i class="fa-solid fa-circle-info mr-1"></i>Bu metin, uygulamayı ("Bursa Manevi Atlası") kullanan herkes için geçerlidir. Uygulamayı kullanarak aşağıdaki şartları kabul etmiş olursunuz. Anlaşmazlık halinde bu Türkçe metin esas alınır.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">1. Taraflar ve Kapsam</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">Bursa Manevi Atlası ("Uygulama"), fikir, konsept ve proje sahibi Ümit Özgüler ("Hak Sahibi") tarafından geliştirilmiştir. Bu şartlar, Uygulamanın web/PWA sürümünü kullanan tüm kişiler ("Kullanıcı") için geçerlidir.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">2. Fikri Mülkiyet Hakları</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">Uygulamanın kaynak kodu, arayüz tasarımı, konsept, isim, logo ve tüm içeriği Hak Sahibine aittir ve telif hakkı mevzuatı ile korunur. Hak Sahibinin önceden yazılı izni olmaksızın Uygulama kısmen veya tamamen kopyalanamaz, çoğaltılamaz, başka bir isim/marka altında yayımlanamaz, değiştirilerek türev bir ürün olarak dağıtılamaz veya ticari/ticari olmayan herhangi bir amaçla kullanılamaz. Ayrıntılı bilgi için Uygulamanın <a href="./LICENSE.txt" target="_blank" rel="noopener" class="font-semibold underline decoration-dotted underline-offset-2" style="color:var(--teal-700);">LICENSE dosyasına</a> bakınız.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">3. İzin Verilen Kullanım</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">Uygulama, yalnızca kişisel ve kişisel olmayan ticari amaç taşımayan kullanım için sunulmuştur. Uygulamayı yalnızca hukuka ve bu şartlara uygun şekilde kullanabilirsiniz. Uygulamanın güvenlik önlemlerini aşmaya çalışmak, kaynak kodunu tersine mühendislikle bu şartlara aykırı biçimde yeniden paketlemek veya kütlesel/otomatik erişim (scraping) yoluyla veri toplamak yasaktır.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">4. Verilerinizin Saklanması ve Sorumluluğunuz</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">Namaz kayıtlarınız, favorileriniz ve tercihleriniz yalnızca kullandığınız cihazda (tarayıcının IndexedDB/localStorage depolama alanında) saklanır; herhangi bir sunucuya gönderilmez. Tarayıcı verilerini/önbelleğini temizlemeniz, farklı bir cihaz veya tarayıcı kullanmanız ya da Uygulamayı kaldırmanız hâlinde bu kayıtlar kalıcı olarak kaybolabilir. Kayıtlarınızı korumak için Uygulama içindeki yedekleme (JSON dışa aktarma) özelliğini düzenli olarak kullanmak tamamen sizin sorumluluğunuzdadır; Hak Sahibi, cihazınızda oluşan veri kayıplarından sorumlu tutulamaz.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">5. Üçüncü Taraf Servisler</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">Uygulama; namaz vakitleri için Aladhan API, hava durumu için Open-Meteo, konum/adres arama için OpenStreetMap Nominatim ve yol tarifi/harita görüntüleme için Google Haritalar gibi üçüncü taraf servislere bağlanabilir. Bu servislerin sağladığı verilerin doğruluğu, güncelliği ve kesintisiz erişilebilirliği Hak Sahibinin kontrolünde değildir ve garanti edilmez. Bu servislerin kendi kullanım şartları ve gizlilik politikaları ayrıca geçerlidir.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">6. Sorumluluk Reddi</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">Uygulama "olduğu gibi" sunulmaktadır. Cami/mescid bilgileri, tarihçe metinleri, namaz vakitleri ve konum verileri özenle derlenmiş olsa da hatasız veya güncel olacağı garanti edilmez. Namaz vakitleri gibi dinî açıdan hassas konularda, bölgenizdeki resmî diyanet kaynaklarını da kontrol etmeniz tavsiye edilir. Hak Sahibi, Uygulamanın kullanımından doğabilecek doğrudan veya dolaylı hiçbir zarardan sorumlu tutulamaz.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">7. Değişiklikler</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">Hak Sahibi, bu Kullanım Şartlarını ve Uygulamayı önceden bildirimde bulunmaksızın güncelleyebilir. Güncel sürüm her zaman Uygulama içinde bu ekranda yer alır; Uygulamayı kullanmaya devam etmeniz güncel şartları kabul ettiğiniz anlamına gelir.</p>
+        </div>
+
+        <div class="space-y-1.5 pb-2">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">8. İletişim</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">Sorularınız, izin talepleriniz veya bildirimleriniz için: <a href="https://www.umitozguler.com.tr" target="_blank" rel="noopener" class="font-semibold underline decoration-dotted underline-offset-2" style="color:var(--teal-700);">www.umitozguler.com.tr</a></p>
+        </div>
+      </div>
+
+      <!-- ENGLISH CONTENT (informal translation) -->
+      <div id="termsContentEn" class="space-y-4 hidden">
+        <div class="paper-card rounded-2xl p-3.5">
+          <p class="text-[10px]" style="color:var(--ink-faint);"><i class="fa-solid fa-circle-info mr-1"></i>This is an informal English translation for convenience. It applies to everyone using the app ("Bursa Manevi Atlası"). By using the app you accept the terms below. In case of any conflict, the Turkish text is authoritative.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">1. Parties and Scope</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">Bursa Manevi Atlası (the "App") was developed by its concept and project owner, Ümit Özgüler (the "Rights Holder"). These terms apply to everyone ("User") using the web/PWA version of the App.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">2. Intellectual Property</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">The App's source code, interface design, concept, name, logo, and all content belong to the Rights Holder and are protected under copyright law. Without the Rights Holder's prior written permission, the App may not be copied or reproduced in whole or in part, published under another name or brand, modified and redistributed as a derivative work, or used for any commercial or non-commercial purpose. See the App's <a href="./LICENSE.txt" target="_blank" rel="noopener" class="font-semibold underline decoration-dotted underline-offset-2" style="color:var(--teal-700);">LICENSE file</a> for details.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">3. Permitted Use</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">The App is provided for personal, non-commercial use only. You may use it solely in a manner consistent with applicable law and these terms. Attempting to bypass the App's security measures, reverse-engineering and repackaging its source code in violation of these terms, or collecting data through bulk/automated access (scraping) is prohibited.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">4. Data Storage and Your Responsibility</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">Your prayer records, favorites, and preferences are stored only on the device you use (in the browser's IndexedDB/localStorage) and are never sent to any server. Clearing your browser data/cache, switching devices or browsers, or uninstalling the App may permanently erase these records. It is entirely your responsibility to regularly use the in-app backup (JSON export) feature to protect your records; the Rights Holder cannot be held responsible for data loss occurring on your device.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">5. Third-Party Services</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">The App may connect to third-party services such as the Aladhan API for prayer times, Open-Meteo for weather, OpenStreetMap Nominatim for location/address search, and Google Maps for directions and map display. The accuracy, timeliness, and uninterrupted availability of data from these services are outside the Rights Holder's control and are not guaranteed. Each of these services' own terms of use and privacy policies apply separately.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">6. Disclaimer</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">The App is provided "as is." While mosque/masjid information, historical texts, prayer times, and location data are compiled with care, they are not guaranteed to be error-free or up to date. For religiously sensitive matters such as prayer times, you are advised to also check official local religious-authority sources. The Rights Holder cannot be held liable for any direct or indirect damages arising from use of the App.</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">7. Changes</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">The Rights Holder may update these Terms of Use and the App without prior notice. The current version is always available on this screen within the App; continuing to use the App means you accept the current terms.</p>
+        </div>
+
+        <div class="space-y-1.5 pb-2">
+          <h4 class="font-bold text-xs font-display" style="color:var(--ink);">8. Contact</h4>
+          <p class="text-[11px] leading-relaxed" style="color:var(--ink-soft);">For questions, permission requests, or notices: <a href="https://www.umitozguler.com.tr" target="_blank" rel="noopener" class="font-semibold underline decoration-dotted underline-offset-2" style="color:var(--teal-700);">www.umitozguler.com.tr</a></p>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1207,6 +1486,7 @@
 
   <!-- ==================== UYGULAMA MANTIĞI (MODÜLLER) ==================== -->
   <script src="mosques-data.js"></script>
+  <script src="changelog.js"></script>
   <script src="db.js"></script>
   <script src="theme.js"></script>
   <script src="map.js"></script>
@@ -1214,7 +1494,118 @@
   <script src="search.js"></script>
   <script src="backup.js"></script>
   <script src="ui.js"></script>
+  <script src="mosque-select-search.js"></script>
+  <script src="out-of-bursa-visit.js"></script>
+  <script src="storage-health.js"></script>
   <script>
+    // === PWA Kurulum Takip & Mantığı ===
+    let deferredPrompt;
+    const installBanner = document.getElementById('installBanner');
+    const installBtn = document.getElementById('installBtn');
+    const installDismissBtn = document.getElementById('installDismissBtn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Tarayıcının varsayılan istemini engelle
+      e.preventDefault();
+      // Olayı daha sonra tetiklemek üzere sakla
+      deferredPrompt = e;
+      // Kurulum bandını göster
+      if (installBanner) {
+        installBanner.classList.remove('hidden');
+        // Analytics: Kurulum teklifi kullanıcıya gösterildi
+        gtag('event', 'pwa_install_prompt_shown', {
+          'event_category': 'PWA',
+          'event_label': 'Install Banner Displayed'
+        });
+      }
+    });
+
+    if (installBtn) {
+      installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        
+        // Analytics: Kullanıcı yükle butonuna bastı
+        gtag('event', 'pwa_install_clicked', {
+          'event_category': 'PWA',
+          'event_label': 'Install Button Clicked'
+        });
+
+        // Kurulum istemini göster
+        deferredPrompt.prompt();
+        
+        // Kullanıcının seçimini bekle
+        const { outcome } = await deferredPrompt.userChoice;
+        
+        if (outcome === 'accepted') {
+          console.log('Kullanıcı kurulumu kabul etti');
+          // Analytics: Kullanıcı kurulumu onayladı
+          gtag('event', 'pwa_install_accepted');
+        } else {
+          console.log('Kullanıcı kurulumu reddetti');
+          // Analytics: Kullanıcı kurulumu iptal etti
+          gtag('event', 'pwa_install_dismissed');
+        }
+        
+        deferredPrompt = null;
+        if (installBanner) installBanner.classList.add('hidden');
+      });
+    }
+
+    if (installDismissBtn) {
+      installDismissBtn.addEventListener('click', () => {
+        if (installBanner) installBanner.classList.add('hidden');
+        // Analytics: Kullanıcı banner'ı kapattı
+        gtag('event', 'pwa_install_banner_closed');
+      });
+    }
+
+    window.addEventListener('appinstalled', (evt) => {
+      console.log('Uygulama başarıyla kuruldu');
+      // Analytics: Kurulum başarıyla tamamlandı
+      gtag('event', 'pwa_install_completed', {
+        'event_category': 'PWA',
+        'event_label': 'App Installed Successfully'
+      });
+      if (installBanner) installBanner.classList.add('hidden');
+    });
+
+    // === iOS Safari için manuel "Ana Ekrana Ekle" talimatı ===
+    // iOS Safari 'beforeinstallprompt' olayını hiçbir zaman tetiklemez,
+    // bu yüzden yukarıdaki Chrome tabanlı kurulum bandı iPhone'da asla görünmez.
+    // Kullanıcıya Paylaş > Ana Ekrana Ekle yolunu manuel olarak gösteriyoruz.
+    (function () {
+      const ua = window.navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+      const isStandalone = window.navigator.standalone === true; // iOS'ta zaten ana ekrandan açılmışsa true
+
+      if (!isIOS || isStandalone) return;
+
+      // Kullanıcı daha önce kapattıysa tekrar gösterme (7 gün)
+      const dismissedAt = localStorage.getItem('iosInstallBannerDismissedAt');
+      if (dismissedAt && (Date.now() - parseInt(dismissedAt, 10)) < 7 * 24 * 60 * 60 * 1000) {
+        return;
+      }
+
+      const iosBanner = document.getElementById('iosInstallBanner');
+      const iosDismissBtn = document.getElementById('iosInstallDismissBtn');
+
+      if (iosBanner) {
+        iosBanner.classList.remove('hidden');
+        gtag('event', 'ios_install_instructions_shown', {
+          'event_category': 'PWA',
+          'event_label': 'iOS Install Banner Displayed'
+        });
+      }
+
+      if (iosDismissBtn) {
+        iosDismissBtn.addEventListener('click', () => {
+          if (iosBanner) iosBanner.classList.add('hidden');
+          localStorage.setItem('iosInstallBannerDismissedAt', String(Date.now()));
+          gtag('event', 'ios_install_banner_closed');
+        });
+      }
+    })();
+
     // Başlat
     populateMosquesDropdown();
     setTodayDateTime();

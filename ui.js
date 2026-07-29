@@ -16,34 +16,32 @@
       if (banner) { banner.classList.add('hidden'); banner.classList.remove('flex'); }
     };
     // ANA SAYFADAKİ "YENİLİKLER" BİLDİRİM KARTI
-    // Statik özellik güncellemeleri için (yeni bir uygulama özelliği yayınlandığında bu sürüm etiketini artırın)
-    const WHATS_NEW_STATIC_VERSION = 'v6-oneri-offline-silinen-ayet';
-    // Envanterdeki en yeni "addedAt" tarihini bulur; yeni cami eklendikçe bu otomatik değişir,
-    // böylece kartın tekrar gösterilip gösterilmeyeceği koddaki bir sürüm numarasına değil,
-    // gerçek veriye bağlı olur (elle güncelleme gerekmez).
+    // Kart artık HTML içine elle yazılmıyor; changelog.js'teki APP_CHANGELOG
+    // dizisinden ve envanterdeki otomatik "yeni cami eklendi" / "bilgi kartı
+    // güncellendi" olaylarından üretilip, en güncel 5 kayıt gösterilir.
+    // Yeni bir özellik eklediğinizde tek yapmanız gereken changelog.js'e bir
+    // kayıt eklemek — bu dosyaya (ui.js) veya index.html'e dokunmanıza gerek
+    // kalmaz.
     function getNewestMosqueAddedAt() {
       const withDates = PRESET_MOSQUES.filter(m => m.addedAt);
       if (withDates.length === 0) return 'none';
       return withDates.reduce((latest, m) => new Date(m.addedAt) > new Date(latest) ? m.addedAt : latest, withDates[0].addedAt);
     }
-    // Son 14 gün içinde eklenen camileri (recentlyAdded ile aynı eşik) özetleyen bir madde üretip karta ekler
-    function renderWhatsNewMosqueEntry() {
-      const el = document.getElementById('whatsNewMosqueEntry');
-      if (!el) return;
+    // Envanterdeki en son eklenen tarihte eklenmiş camileri özetleyen bir
+    // "Yenilikler" kaydı üretir (varsa). Kart, bu tarihten itibaren 14 gün
+    // boyunca listede kalabilir (14 günden eskiyse artık "yeni" sayılmaz).
+    function buildMosqueAddedEntry() {
+      const newestAddedAt = getNewestMosqueAddedAt();
+      if (newestAddedAt === 'none') return null;
 
       const now = new Date();
-      const recentNew = PRESET_MOSQUES
-        .filter(m => m.addedAt)
-        .filter(m => {
-          const diffDays = Math.floor((now - new Date(m.addedAt)) / (1000 * 60 * 60 * 24));
-          return diffDays >= 0 && diffDays <= 14;
-        })
-        .sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
+      const daysSinceUpdate = Math.floor((now - new Date(newestAddedAt)) / (1000 * 60 * 60 * 24));
+      if (daysSinceUpdate < 0 || daysSinceUpdate > 14) return null;
 
-      if (recentNew.length === 0) {
-        el.innerHTML = '';
-        return;
-      }
+      const recentNew = PRESET_MOSQUES
+        .filter(m => m.addedAt === newestAddedAt)
+        .sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
+      if (recentNew.length === 0) return null;
 
       const districts = [...new Set(recentNew.map(m => m.district))];
       const districtText = districts.length > 1
@@ -52,55 +50,414 @@
       const namesPreview = recentNew.slice(0, 3).map(m => m.name).join(', ');
       const extra = recentNew.length > 3 ? ` ve ${recentNew.length - 3} diğeri` : '';
 
-      el.innerHTML = `
+      return {
+        id: `mosque-added-${newestAddedAt}`,
+        date: newestAddedAt,
+        icon: '🕌',
+        title: `${recentNew.length} Yeni Cami Eklendi`,
+        desc: `${escapeHtml(districtText)} bölgelerinden ${escapeHtml(namesPreview)}${escapeHtml(extra)} envantere katıldı.`
+      };
+    }
+    // Envanterdeki en yeni "infoUpdatedAt" tarihini bulur; bir caminin bilgi
+    // kartı eklendikçe/güncellendikçe bu otomatik değişir.
+    function getNewestInfoUpdateDate() {
+      const withDates = PRESET_MOSQUES.filter(m => m.infoUpdatedAt);
+      if (withDates.length === 0) return 'none';
+      return withDates.reduce((latest, m) => new Date(m.infoUpdatedAt) > new Date(latest) ? m.infoUpdatedAt : latest, withDates[0].infoUpdatedAt);
+    }
+    // En son güncelleme tarihinde bilgi kartı eklenen/güncellenen camileri
+    // özetleyen bir "Yenilikler" kaydı üretir (varsa).
+    function buildInfoUpdateEntry() {
+      const newestInfoUpdate = getNewestInfoUpdateDate();
+      if (newestInfoUpdate === 'none') return null;
+
+      const now = new Date();
+      const daysSinceUpdate = Math.floor((now - new Date(newestInfoUpdate)) / (1000 * 60 * 60 * 24));
+      if (daysSinceUpdate < 0 || daysSinceUpdate > 14) return null;
+
+      const recentlyUpdated = PRESET_MOSQUES
+        .filter(m => m.infoUpdatedAt === newestInfoUpdate)
+        .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+      if (recentlyUpdated.length === 0) return null;
+
+      const namesPreview = recentlyUpdated.slice(0, 3).map(m => m.name).join(', ');
+      const extra = recentlyUpdated.length > 3 ? ` ve ${recentlyUpdated.length - 3} diğerinin` : '';
+      const title = recentlyUpdated.length === 1
+        ? `${recentlyUpdated[0].name} Bilgi Kartı Yenilendi`
+        : `${recentlyUpdated.length} Caminin Bilgi Kartı Yenilendi`;
+      const desc = recentlyUpdated.length === 1
+        ? `Yapılış tarihi, banisi ve mimari geçmişine dair ayrıntılı bilgiler eklendi.`
+        : `${escapeHtml(namesPreview)}${escapeHtml(extra)} yapılış tarihi, banisi ve mimari geçmişine dair ayrıntılı bilgileri eklendi.`;
+
+      return {
+        id: `info-updated-${newestInfoUpdate}`,
+        date: newestInfoUpdate,
+        icon: '📖',
+        title: escapeHtml(title),
+        desc,
+        details: recentlyUpdated.map(m => `${m.name} — ${m.district}`)
+      };
+    }
+    // Elle yazılan (changelog.js) ve otomatik üretilen (yeni cami/bilgi
+    // güncellemesi) kayıtları birleştirip tarihe göre en yeniden en eskiye
+    // sıralar, sadece ilk 5'ini döndürür.
+    function buildWhatsNewEntries() {
+      const entries = Array.isArray(window.APP_CHANGELOG) ? window.APP_CHANGELOG.slice() : [];
+      const mosqueEntry = buildMosqueAddedEntry();
+      if (mosqueEntry) entries.push(mosqueEntry);
+      const infoEntry = buildInfoUpdateEntry();
+      if (infoEntry) entries.push(infoEntry);
+      entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+      return entries.slice(0, 5);
+    }
+    function renderWhatsNewEntryHtml(entry, idx) {
+      const hasDetails = Array.isArray(entry.details) && entry.details.length > 0;
+      const detailsHtml = hasDetails ? `
+        <button onclick="toggleWhatsNewDetail(${idx})" class="text-[10px] font-bold mt-1" style="color:var(--teal-700);">
+          <span id="whatsNewToggleLabel-${idx}">Detayları gör</span> <i id="whatsNewToggleIcon-${idx}" class="fa-solid fa-chevron-down text-[8px]"></i>
+        </button>
+        <ul id="whatsNewDetailList-${idx}" class="hidden mt-1.5 space-y-0.5 text-[10px] leading-snug list-disc pl-4" style="color:var(--ink-soft);">
+          ${entry.details.map(d => `<li>${escapeHtml(d)}</li>`).join('')}
+        </ul>` : '';
+      return `
         <div class="flex items-start gap-2.5">
-          <span class="text-base leading-none mt-0.5">🕌</span>
+          <span class="text-base leading-none mt-0.5">${entry.icon}</span>
           <div class="min-w-0">
-            <p class="text-[11px] font-bold" style="color:var(--ink);">${recentNew.length} Yeni Cami Eklendi</p>
-            <p class="text-[10px] leading-snug" style="color:var(--ink-soft);">${escapeHtml(districtText)} bölgelerinden ${escapeHtml(namesPreview)}${escapeHtml(extra)} envantere katıldı.</p>
+            <p class="text-[11px] font-bold" style="color:var(--ink);">${entry.title}</p>
+            <p class="text-[10px] leading-snug" style="color:var(--ink-soft);">${entry.desc}</p>
+            ${detailsHtml}
           </div>
         </div>`;
     }
+    window.toggleWhatsNewDetail = function(idx) {
+      const list = document.getElementById(`whatsNewDetailList-${idx}`);
+      const label = document.getElementById(`whatsNewToggleLabel-${idx}`);
+      const icon = document.getElementById(`whatsNewToggleIcon-${idx}`);
+      if (!list) return;
+      const willShow = list.classList.contains('hidden');
+      list.classList.toggle('hidden');
+      if (label) label.textContent = willShow ? 'Detayları gizle' : 'Detayları gör';
+      if (icon) { icon.classList.toggle('fa-chevron-down', !willShow); icon.classList.toggle('fa-chevron-up', willShow); }
+    };
     function initWhatsNewBanner() {
       const banner = document.getElementById('whatsNewBanner');
-      if (!banner) return;
+      const listEl = document.getElementById('whatsNewList');
+      if (!banner || !listEl) return;
 
-      renderWhatsNewMosqueEntry();
+      const entries = buildWhatsNewEntries();
+      listEl.innerHTML = entries.map((entry, idx) => renderWhatsNewEntryHtml(entry, idx)).join('');
 
-      const currentVersion = `${WHATS_NEW_STATIC_VERSION}|${getNewestMosqueAddedAt()}`;
+      const currentVersion = entries.map(e => e.id).join('|');
       window.__whatsNewCurrentVersion = currentVersion;
 
       const dismissedVersion = localStorage.getItem('manevi-atlas-whatsnew-dismissed');
-      if (dismissedVersion !== currentVersion) {
+      if (entries.length > 0 && dismissedVersion !== currentVersion) {
         banner.classList.remove('hidden');
       }
     }
     window.dismissWhatsNewBanner = function() {
-      localStorage.setItem('manevi-atlas-whatsnew-dismissed', window.__whatsNewCurrentVersion || WHATS_NEW_STATIC_VERSION);
+      localStorage.setItem('manevi-atlas-whatsnew-dismissed', window.__whatsNewCurrentVersion || '');
       const banner = document.getElementById('whatsNewBanner');
       if (banner) banner.classList.add('hidden');
+    };
+    // === UYGULAMA GÜNCELLEME KONTROLÜ ===
+    // Servis çalışanı (service worker), performans için statik dosyaları (cami
+    // listesi, arayüz kodları vb.) cihazda önbelleğe alır. Bu sayede uygulama
+    // internetsizken de açılabilir, ama sunucudaki bilgiler değiştiğinde (ör.
+    // yeni bir cami eklendiğinde) cihazdaki önbellek kendiliğinden yenilenmez.
+    // Bu yüzden sunucudaki küçük "version.json" dosyasını (önbelleğe hiç
+    // takılmadan, doğrudan ağdan) kontrol ediyoruz; cihazda daha önce görülen
+    // sürümden farklıysa kullanıcıya bir "Güncelle" bandı gösteriyoruz.
+    // Sunucudaki cami/bilgi verisinin (mosques-data.js) gerçek içeriğinin bir
+    // özetini (SHA-256 hash) hesaplar. Bu, "version.json" gibi elle güncellenmesi
+    // gereken bir dosyaya bağlı değildir: siz mosques-data.js'i sunucuya her
+    // yüklediğinizde (tek bir harf bile değişse) bu özet otomatik olarak
+    // değişir. Böylece güncelleme tespiti tamamen otomatikleşir; sizin ayrıca
+    // bir sürüm numarası/metni girmenizi gerektirmez.
+    async function computeContentHash() {
+      const res = await fetch(`./mosques-data.js?__freshcheck=1&t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('mosques-data.js alınamadı');
+      const text = await res.text();
+      const encoded = new TextEncoder().encode(text);
+      const digest = await crypto.subtle.digest('SHA-256', encoded);
+      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+    }
+    async function checkForAppUpdate(manualTrigger = false) {
+      try {
+        // Sürüm kontrolüyle eş zamanlı olarak servis çalışanının da sunucudaki
+        // sw.js'i kontrol etmesini tetikle. Böylece sadece içerik değil,
+        // servis çalışanının kendisi değiştiyse de en erken şekilde fark edilir.
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistration().then((reg) => {
+            if (reg) reg.update().catch(() => {});
+          }).catch(() => {});
+        }
+
+        // version.json artık ZORUNLU değil: sadece varsa, ayarlardaki "Uygulama
+        // Sürümü" rozetinde okunaklı bir etiket göstermek için kullanılır.
+        // Güncelleme olup olmadığı kararı buna bağlı DEĞİLDİR — bu dosyayı
+        // güncellemeyi unutsanız bile aşağıdaki içerik özeti kontrolü sayesinde
+        // uygulama gerçek değişikliği kendiliğinden fark eder.
+        let displayVersion = null;
+        try {
+          const vres = await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' });
+          if (vres.ok) {
+            const vdata = await vres.json();
+            displayVersion = vdata.version || null;
+          }
+        } catch (e) { /* version.json yoksa sorun değil, sessizce geç */ }
+
+        const remoteHash = await computeContentHash();
+        window.__remoteAppVersion = displayVersion || remoteHash;
+        window.__remoteContentHash = remoteHash;
+
+        const localHash = localStorage.getItem('manevi-atlas-content-hash');
+        updateVersionBadge(displayVersion || localHash || remoteHash);
+
+        // Cihazda bu içerik takibi özelliğinden önce yüklenmiş, zaten bir
+        // servis çalışanı tarafından kontrol edilen (dolayısıyla önbellekte
+        // eski dosyalar barındırma ihtimali olan) bir sayfa olabilir. Böyle
+        // bir durumda "localHash boş, o yüzden ilk kurulumdur" varsayıp
+        // sessizce "güncel" demek YANLIŞ ve yanıltıcıdır. Bu yüzden sadece
+        // gerçekten hiçbir servis çalışanı kaydı yokken (yani cihazda
+        // önbellek de yoksa) sessiz ilk-kurulum varsayımını yap.
+        const hasExistingController = ('serviceWorker' in navigator) && !!navigator.serviceWorker.controller;
+        if (!localHash && !hasExistingController) {
+          localStorage.setItem('manevi-atlas-content-hash', remoteHash);
+          if (manualTrigger) showToast("Uygulama güncel.", "success");
+          return false;
+        }
+
+        if (localHash !== remoteHash) {
+          if (manualTrigger) {
+            // Kullanıcı elle "güncellemeyi kontrol et" dediyse, bandı göster ve
+            // ona haber ver — ama karar yine kendisine bırakılır.
+            const banner = document.getElementById('appUpdateBanner');
+            if (banner) banner.classList.remove('hidden');
+            showToast("Yeni bir güncelleme bulundu.", "success");
+          } else {
+            // OTOMATİK GÜNCELLEME: Uygulama açılışında sessizce fark tespit edildi.
+            // Kullanıcının ayrıca bir bandı fark edip tıklamasını beklemeden,
+            // güncellemeyi hemen kendiliğinden uygula. Namaz kayıtları IndexedDB'de
+            // tutulduğundan bu işlem hiçbir veri kaybına yol açmaz; sadece
+            // uygulamanın kod/veri önbelleğini tazeler ve sayfayı bir kez yeniler.
+            // Sonsuz döngüyü önlemek için applyAppUpdate, yeniden yüklemeden önce
+            // yerel özet değerini güncel değerle eşitler.
+            if (typeof window.applyAppUpdate === 'function') {
+              window.applyAppUpdate();
+            }
+          }
+          return true;
+        } else if (manualTrigger) {
+          showToast("Uygulama zaten güncel.", "success");
+        }
+        return false;
+      } catch (e) {
+        if (manualTrigger) showToast("Güncelleme kontrol edilemedi. İnternet bağlantınızı kontrol edin.", "error");
+        return false;
+      }
+    }
+    // Ayarlar sayfasındaki "Uygulama Sürümü: …" etiketini günceller. Bu, bir
+    // sorun bildirirken ("telefonumda hangi sürüm çalışıyor?") tek bakışta
+    // cevap verebilmeyi sağlar — konsol veya kaynak koda bakmaya gerek kalmaz.
+    function updateVersionBadge(version) {
+      const el = document.getElementById('appVersionBadge');
+      if (el && version) el.textContent = version;
+    }
+    window.updateVersionBadge = updateVersionBadge;
+    window.checkForAppUpdate = checkForAppUpdate;
+    window.dismissAppUpdateBanner = function() {
+      const banner = document.getElementById('appUpdateBanner');
+      if (banner) banner.classList.add('hidden');
+    };
+    // Kullanıcı "Güncelle" butonuna bastığında: cihazdaki tüm eski önbellekleri
+    // temizler, sürüm numarasını günceller ve sayfayı sıfırdan (ağdan) yeniden
+    // yükler. Bu, cami defteri (ziyaret kayıtları) IndexedDB'de tutulduğu için
+    // hiçbir kayıt kaybına yol açmaz — sadece uygulamanın kendi kodunu ve
+    // cami listesini en güncel haliyle yeniden indirir.
+    window.applyAppUpdate = async function() {
+      try {
+        window.haptic(15);
+        showToast("Güncelleniyor...", "success");
+
+        // Tercih edilen yol: sunucuda hazır bekleyen bir servis çalışanı varsa
+        // (bkz. 'updatefound' dinleyicisi), ona nazikçe devral mesajı gönder.
+        // Devrettiğinde 'controllerchange' olayı sayfayı zaten yenileyecek.
+        if (window.__pendingSW) {
+          window.__pendingSW.postMessage('SKIP_WAITING');
+          if (window.__remoteContentHash) {
+            localStorage.setItem('manevi-atlas-content-hash', window.__remoteContentHash);
+          }
+          return;
+        }
+
+        // Yedek yol: bekleyen bir SW henüz tespit edilmediyse (ör. sadece
+        // version.json değişmiş, veya SW kontrolü daha tamamlanmadıysa) eski
+        // yöntemle tüm önbellekleri temizleyip sayfayı sıfırdan yeniden yükle.
+        // Bu durumda da hiçbir kayıt kaybı olmaz; cami kayıtları IndexedDB'de,
+        // bu temizlik yalnızca uygulamanın kendi kod/veri önbelleğini kapsar.
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration();
+          if (reg) await reg.update().catch(() => {});
+        }
+        if (window.__remoteContentHash) {
+          localStorage.setItem('manevi-atlas-content-hash', window.__remoteContentHash);
+        }
+        setTimeout(() => { window.location.reload(); }, 250);
+      } catch (e) {
+        showToast("Güncelleme uygulanamadı. Lütfen tekrar deneyin.", "error");
+      }
     };
     // Envanterde ayrıntılı kaydı bulunmayan mabetler için dürüst, genel bir tanıtım metni üretir
     function getMosqueInfo(m) {
       if (MOSQUE_INFO_OVERRIDES[m.id]) return MOSQUE_INFO_OVERRIDES[m.id];
       if (MOSQUE_INFO[m.id]) return MOSQUE_INFO[m.id];
+      // MOSQUE_INFO sözlüğünde ayrı bir kayıt yoksa, caminin kendi nesnesine
+      // doğrudan eklenmiş "info" alanını kullan (mosques-data.js'e iki farklı
+      // yoldan bilgi eklenebilir; ikisi de burada birleştirilir). period/founder
+      // ayrıca girilmediyse dürüst bir yer tutucu metin gösterilir.
+      if (m.info) {
+        return {
+          period: m.period || "Kesin yapım tarihi envanterimizde kayıtlı değil",
+          founder: m.founder || "Banisi hakkında doğrulanmış bir kayıt henüz eklenmedi",
+          info: m.info
+        };
+      }
       return {
         period: "Kesin yapım tarihi envanterimizde kayıtlı değil",
         founder: "Banisi hakkında doğrulanmış bir kayıt henüz eklenmedi",
         info: `${escapeHtml(m.name)}, Bursa'nın ${m.district} ilçesindeki tescilli tarihi cami ve mescidlerinden biridir. Bu mabetle ilgili yapım tarihi, banisi ve mimari geçmişine dair ayrıntılı bilgiler Vakıflar Genel Müdürlüğü ve yerel kültür envanteri kayıtlarında yer almaktadır; bu kayıtlar uygulamamıza henüz eklenmemiştir.`
       };
     }
-    // YENİ EKLENEN: GÜNÜN AYETLERİ DİZİSİ
+ // YENİ EKLENEN: GÜNÜN AYETLERİ DİZİSİ
     const QURAN_VERSES = [
-      { text: "\"Onlar gaybe inanırlar, namazı dosdoğru kılarlar, kendilerine rızık olarak verdiğimizden de Allah yolunda harcarlar.\"", source: "Bakara Sûresi 3" },
-      { text: "\"Namazı kılın, zekâtı verin. Rükû edenlerle birlikte siz de rükû edin.\"", source: "Bakara Sûresi 43" },
-      { text: "\"Sabrederek ve namaz kılarak (Allah’tan) yardım dileyin. Şüphesiz namaz, Allah’a derinden saygı duyanlardan başkasına ağır gelir.\"", source: "Bakara Sûresi 45" },
-      { text: "\"Hani, biz İsrailoğulları’ndan, 'Allah’tan başkasına ibadet etmeyeceksiniz, anne babaya, yakınlara, yetimlere, yoksullara iyilik edeceksiniz, herkese güzel sözler söyleyeceksiniz, namazı kılacaksınız, zekâtı vereceksiniz' diye söz almıştık. Sonra pek azınız hariç, yüz çevirerek sözünüzden döndünüz.\"", source: "Bakara Sûresi 83" },
-      { text: "\"Namazı dosdoğru kılın, zekâtı verin. Kendiniz için her ne iyilik işlemiş olursanız, Allah katında onu bulursunuz. Şüphesiz Allah bütün yaptıklarınızı görür.\"", source: "Bakara Sûresi 110" },
-      { text: "\"Hani, biz Kâbe’yi insanlara toplantı ve güven yeri kılmıştık. Siz de Makam-ı İbrahim’den kendinize bir namaz yeri edinin. İbrahim ve İsmail’e şöyle emretmiştik: 'Tavaf edenler, kendini ibadete verenler, rükû ve secde edenler için evimi (Kâbe’yi) tertemiz tutun.'\"", source: "Bakara Sûresi 125" },
-      { text: "\"Ey iman edenler! Sabrederek ve namaz kılarak Allah’tan yardım dileyin. Şüphe yok ki, Allah sabredenlerle beraberdir.\"", source: "Bakara Sûresi 153" },
-      { text: "\"İyilik, yüzlerinizi doğu ve batı taraflarına çevirmeniz(den ibaret) değildir. Asıl iyilik, Allah’a, ahiret gününe, meleklere, kitap ve peygamberlere iman edenlerin; mala olan sevgilerine rağmen, onu yakınlara, yetimlere, yoksullara, yolda kalmışa, (ihtiyacından dolayı) isteyene ve (özgürlükleri için) kölelere verenlerin; namazı dosdoğru kılan, zekâtı veren, antlaşma yaptıklarında sözlerini yerine getirenlerin ve zorda, hastalıkta ve savaşın kızıştığı zamanlarda (direnip) sabredenlerin tutum ve davranışlarıdır. İşte bunlar, doğru olanlardır. İşte bunlar, Allah’a karşı gelmekten sakınanların ta kendileridir.\"", source: "Bakara Sûresi 177" },
-      { text: "\"Namazlara ve orta namaza devam edin. Allah’a gönülden boyun eğerek namaza durun. Eğer (bir tehlikeden) korkarsanız, namazı yaya olarak veya binek üzerinde kılın. Güvenliğe kavuşunca da, Allah’ı, daha önce bilmediğiniz ve onun size öğrettiği şekilde anın (namazı normal vakitlerdeki gibi kılın).\"", source: "Bakara Sûresi 238-239" }
+      { text: "\"Ki onlar gaybe iman eder, namazı dosdoğru kılar ve kendilerine rızık olarak verdiğimiz şeylerden harcarlar.\"", source: "Bakara / 3. Ayet" },
+      { text: "\"Sonra Âdem, Rabbinden öğrendiği sözlerle Allah’a yalvardı, tevbe etti, Allah da tevbesini kabul buyurdu. Doğrusu O, tevbeleri çok kabul eden, nihâyetsiz merhamet sahibi olandır.\"", source: "Bakara / 37. Ayet" },
+      { text: "\"Namazı dosdoğru kılın, zekâtı verin ve rukû edenlerle beraber siz de rukû edin.\"", source: "Bakara / 43. Ayet" },
+      { text: "\"Sabır ve namazla Allah’tan yardım isteyin. Doğrusu namaz çok ağır ve çetin bir iştir. Ancak o, Allah’a duyduğu derin saygıdan kalbi ürperenlere ağır gelmez.\"", source: "Bakara / 45. Ayet" },
+      { text: "\"Onlar, kendilerinin Rablerine kavuşacaklarını ve günün birinde O’na döneceklerini kesinlikle bilen kimselerdir.\"", source: "Bakara / 46. Ayet" },
+      { text: "\"Hani biz, İsrâiloğulları’ndan: 'Sadece Allah’a kulluk edeceksiniz, ana-babaya, akrabaya, yetimlere, yoksullara iyilikte bulunacaksınız!' diye söz almış ve: 'İnsanlara güzel söz söyleyin, namazı hakkıyla kılın, zekâtı verin!' diye emretmiştik. Sonra sizden pek azı müstesna, sözünüzden döndünüz ve hâlâ yüz çevirmeye devam ediyorsunuz.\"", source: "Bakara / 83. Ayet" },
+      { text: "\"Namazı dosdoğru kılın ve zekâtı verin. Kendiniz için önceden her ne iyilik yaparsanız, mükâfatını Allah’ın yanında bulacaksınız. Çünkü Allah, bütün yaptıklarınızı görmektedir.\"", source: "Bakara / 110. Ayet" },
+      { text: "\"Doğu da Allah’ındır, batı da. O halde nereye dönerseniz dönün, Allah’a yönelmiş olur, O’nu karşınızda bulursunuz. Elbette Allah lutf u keremi çok geniş olan ve her şeyi hakkıyla bilendir.\"", source: "Bakara / 115. Ayet" },
+      { text: "\"Biz Kâbe’yi, insanlar için toplanıp sevap kazanma yeri ve emniyetli bir mekân kıldık. Öyleyse siz de İbrâhim’in makâmını namazgâh edinin. Zâten İbrâhim’le İsmâil’e de: 'Tavaf edenler, ibâdet kastıyla orada kalanlar, rükû ve secde edenler için evimi tertemiz tutun!' diye emretmiştik.\"", source: "Bakara / 125. Ayet" },
+      { text: "\"İnsanlardan bir takım beyinsizler: 'Müslümanları, şimdiye kadar yöneldikleri kıbleden vazgeçiren sebep nedir?' diyecekler. De ki: 'Doğu da Allah’ındır, batı da. O, dilediğini doğru yola kavuşturur.'\"", source: "Bakara / 142. Ayet" },
+      { text: "\"Böylece sizi, bütün insanlara şâhit ve örnek olasınız, Peygamber de size şâhit ve örnek olsun diye dengeli mutedil bir ümmet kıldık. Senin daha önce de yöneldiğin Kâbe’yi yeniden kıble yapmamızın sebebi, Peygamber’e uyanları, ökçesi üzerinde tekrar eski dinlerine dönecek olanlardan ayırmak içindir. Kıblenin değiştirilmesi, Allah’ın doğru yola ilettiklerinden başkalarına elbette ağır gelir. Allah sizin imanınızı, önceden Beyt-i Makdis’e yönelerek kıldığınız namazları zâyi etmeyecektir. Çünkü Allah, insanlara çok şefkatli, çok merhametlidir.\"", source: "Bakara / 143. Ayet" },
+      { text: "\"Rasûlüm! Biz, kıbleyle alakalı vahiy ümidiyle yüzünü sık sık göğe doğru çevirip durduğunu elbette görüyoruz. Şimdi seni râzı olacağın bir kıbleye döndürüyoruz. Bundan böyle namazda yüzünü Mescid-i Harâm’a doğru çevir. Ey mü’minler! Siz de nerede olursanız olun, namaz kılarken yüzünüzü o yöne çevirin. Kendilerine kitap verilenler, bunun Rablerinden gelen bir gerçek olduğunu çok iyi bilirler. Allah, onların yaptıklarından habersiz değildir.\"", source: "Bakara / 144. Ayet" },
+      { text: "\"Her milletin yöneldiği bir kıblesi vardır. Siz hep hayırlı işler yapmada birbirinizle yarışın! Nerede olursanız olun, Allah hepinizi huzurunda bir araya getirecektir. Çünkü Allah’ın her şeye gücü yeter.\"", source: "Bakara / 148. Ayet" },
+      { text: "\"O halde siz beni anın, ben de sizi anayım. Bana şükredin ve sakın nimetlerime nankörlük etmeyin.\"", source: "Bakara / 152. Ayet" },
+      { text: "\"Ey iman edenler! Sabrederek ve namaz kılarak Allah’tan yardım isteyin! Çünkü Allah, sabredenlerle beraberdir.\"", source: "Bakara / 153. Ayet" },
+      { text: "\"Yüzlerinizi doğu ya da batı tarafına çevirmeniz iyilik değildir. Asıl iyilik; Allah’a, âhiret gününe, meleklere, kitaplara ve peygamberlere inanan; malını sevdiği halde akrabasına, yetimlere, yoksullara, yolda kalan gariplere, dilenenlere, hürriyetine kavuşmak isteyen köle ve esirlere veren; namazı dosdoğru kılıp zekâtı ödeyen; antlaşma yaptığında sözünde duran; sıkıntı, darlık, hastalık ve şiddetli savaş zamanlarında sabredenlerin yaptığıdır. Kulluklarında samimi ve dürüst olanlar işte bunlardır; gerçek takvâ sahipleri de yine bunlardır.\"", source: "Bakara / 177. Ayet" },
+      { text: "\"Rasûlüm! Kullarım sana beni sorarlarsa, şüphesiz ben onlara çok yakınım. Bana dua edenin duasına icâbet ederim. Öyleyse onlar da benim dâvetime uysunlar ve bana iman etsinler. Böyle yaparlarsa, en doğru yolu bulmuş olurlar.\"", source: "Bakara / 186. Ayet" },
+      { text: "\"Namazları, özellikle orta namazı vaktinde, eksiksiz ve şartlarına uygun olarak kılmaya devam edin. Allah’ın huzurunda derin bir saygıyla el bağlayıp divan durun.\"", source: "Bakara / 238. Ayet" },
+      { text: "\"Eğer bir korku ve tehlike söz konusu olursa namazınızı yürürken veya binek üzerinde kılabilirsiniz. Emniyete kavuştuğunuzda ise, bilmediklerinizi size öğrettiği şekilde Allah’ı zikredin; namazı şartlarına uygun olarak kılın.\"", source: "Bakara / 239. Ayet" },
+      { text: "\"Allah ki, O’ndan başka hiçbir ilâh yoktur. O, ebedî diridir. Varlığı kendinden olup bütün kâinatı yönetendir. O’nu ne bir uyuklama ne de bir uyku yakalayabilir. Göklerde ve yerde ne varsa hepsi O’nundur. İzni olmadan O’nun huzurunda kim kalkıp da şefaat edebilir? O, kullarının geleceğini de bilir, geçmişini de. Kullar ise, dilediği dışında O’nun ilminden hiçbir şeyi kavrayamazlar. O’nun kürsüsü, gökleri ve yeri kuşatmıştır. Dolayısıyla her ikisini de koruyup gözetmek O’na asla ağır gelmez. En yüce ve en büyük yalnız O’dur.\"", source: "Bakara / 255. Ayet" },
+      { text: "\"İman edip sâlih ameller işleyen, namazı dosdoğru kılıp zekâtı verenler yok mu, işte onların Rableri katında mükâfatları vardır. Onlara hiçbir korku yoktur ve onlar asla üzülmeyeceklerdir.\"", source: "Bakara / 277. Ayet" },
+      { text: "\"Allah, kimseyi gücünün yetmeyeceği şeyle sorumlu tutmaz. Herkesin yaptığı iyilik kendi yararına, işlediği günahlar da kendi zararınadır. O mü’minler, niyazlarına şöyle devam etiler: 'Rabbimiz! Unutur veya hata edersek bizi cezalandırma! Rabbimiz! Bizden öncekilere yüklediğin gibi bize de ağır bir yük yükleme! Rabbimiz! Kaldıramayacağımız şeyleri de bize yükleme! Günahlarımızı affet, bizi bağışla, bize merhamet et! Sen bizim sahibimiz ve yardımcımızsın. Kâfirler gürûhuna karşı bize yardım eyle!'\"", source: "Bakara / 286. Ayet" },
+      { text: "\"Zekeriya, mâbette durmuş namaz kılarken melekler ona şöyle seslendi: 'Allah sana Yahya isminde bir evladın olacağını müjdeliyor. O, Allah’tan bir kelime olan İsa’yı doğrulayacak, hem kavminin efendisi olacak, dünya zevklerinden uzak bir hayat sürecek, hem de sâlih kullar arasından seçilmiş bir peygamber olacaktır.'\"", source: "Âl-i İmrân / 39. Ayet" },
+      { text: "\"Ey iman edenler! Sarhoş iken ne söylediğinizi bilecek derecede ayıkıncaya, cünüp iken de -yolcu olanlarınız hâriç- yıkanıncaya kadar namaza yaklaşmayın. Eğer hasta ya da yolcu iseniz veya sizden biriniz abdestini bozmuşsa veyahut kadınlarınızla cinsî münâsebette bulunmuşsanız; bu durumlarda abdest alacak veya yıkanacak su bulamazsanız, o zaman temiz bir toprakla teyemmüm edin: yüzünüzü ve kollarınızı onunla meshedin. Doğrusu Allah, çok affedici, çok bağışlayıcıdır.\"", source: "Nisâ / 43. Ayet" },
+      { text: "\"Allah, düşmanlarınızın kimler olduğunu sizden daha iyi bilir. Gerçek dost olarak Allah yeter, yardımcı olarak da Allah yeter!\"", source: "Nisâ / 45. Ayet" },
+      { text: "\"Ne zaman savaş izni verileceğini sorup durdukları bir zamanda kendilerine: 'Şimdilik elinizi savaştan çekin, namazı dosdoğru kılın ve zekâtı verin' denilen kimseleri görmedin mi? Nihâyet üzerlerine savaş farz kılınınca içlerinden bir kısmının, Allah’tan korkar gibi, hatta daha da fazla insanlardan korkmaya başladığını ve: 'Rabbimiz, bize savaşı niçin farz kıldın? Bize biraz daha mühlet verseydin olmaz mıydı?' dediklerini görürsün. Onlara de ki: 'Dünyanın menfaati pek azdır ve kısa bir süre içindir. Âhiret ise, Allah’a karşı gelmekten sakınanlar için bütünüyle hayırdır ve size orada kıl kadar bile bir haksızlık yapılmaz.'\"", source: "Nisâ / 77. Ayet" },
+      { text: "\"Yeryüzünde sefere çıktığınız zaman, kâfirlerin size bir fenâlık yapmasından korkarsanız, namazı kısaltmanızda üzerinize bir günah yoktur. Şüphesiz kâfirler, sizin apaçık düşmanınızdır.\"", source: "Nisâ / 101. Ayet" },
+      { text: "\"Rasûlüm! Savaşta mü’minler arasında bulunup onlara namaz kıldırdığın zaman, onlardan bir grup silahlarını da yanlarına alarak seninle beraber namaza dursunlar. Bu esnâda diğer grup düşmanı gözetlesin. Namaz kılan grup secde yapıp rekâtı tamamlayınca, düşmanı gözetlemek üzere arka tarafa geçsin. Sonra henüz namaz kılmamış olan diğer grup gelsin ve seninle beraber namazlarını kılsınlar. Hem yer değiştirirken hem de namaz esnâsında ihtiyat tedbirlerini alsınlar, silahlarını da yanlarında bulundursunlar. Çünkü kâfirler, silahlarınızı ve teçhîzâtınızı unutup bırakmanızı, böylece âni bir baskınla üzerinize saldırmayı çok arzu ederler. Ancak yağmur-çamurdan dolayı sıkıntıya düşerseniz, yahut hasta iseniz namaz kılarken silahlarınızı yere bırakmanızda size bir vebâl yoktur. Fakat yine de gelebilecek tehlikelere karşı tedbiri elden bırakmayın. Şüphesiz ki Allah, kâfirler için pek alçaltıcı bir azap hazırlamıştır.\"", source: "Nisâ / 102. Ayet" },
+      { text: "\"Korku hâlinde kıldığınız namazı bitirince ayakta iken, otururken ve yanlarınız üzerine yatarken Allah’ı zikredin. Korkudan emîn olduğunuz vakit ise artık namazı normal zamandaki şartlarına uyarak dosdoğru kılın. Çünkü namaz, mü’minler üzerine vakitleri belirlenmiş farz bir ibâdetdir.\"", source: "Nisâ / 103. Ayet" },
+      { text: "\"Münafıklar, kendilerince güyâ Allah’ı aldatmaya çalışıyorlar. Oysa Allah, onların hilelerini sürekli kendi başlarına çeviriyor. Onlar namaza kalktıklarında tembel tembel kalkarlar, insanlara gösteriş yaparlar ve Allah’ı da pek az hatırlarına getirirler.\"", source: "Nisâ / 142. Ayet" },
+      { text: "\"Fakat onlardan ilimde derinleşmiş olanlar ile, sana indirilene ve senden önce indirilen kitaplara iman eden mü’minlere; özellikle namazı dosdoğru kılan, zekâtı veren, Allah’a ve âhiret gününe iman edenlere pek büyük bir mükâfat vereceğiz.\"", source: "Nisâ / 162. Ayet" },
+      { text: "\"Ey iman edenler! Namaza kalktığınızda yüzlerinizi, dirseklere kadar ellerinizi ve kollarınızı yıkayın, başınıza meshedin ve topuklara kadar da ayaklarınızı yıkayın! Eğer cünüp iseniz güzelce yıkanıp temizlenin. Şayet hasta veya yolcu olursanız yahut biriniz tuvaletten gelirse ya da eşlerinizle cinsî münâsebette bulunur da, abdest veya gusül almanız gereken böyle durumlarda su bulamazsanız, o zaman temiz toprağa ellerinizi sürüp onunla yüzlerinizi ve dirseklere kadar kollarınızı meshedin. Bu tür emirlerle Allah size güçlük çıkarmak istemez; bilakis şükredesiniz diye sizi tertemiz kılmak ve size olan nimetini tamamlamak ister.\"", source: "Mâide / 6. Ayet" },
+      { text: "\"Allah İsrâiloğulları’ndan kesin ve bağlayıcı bir söz almıştı. Biz onlardan, her bir kabileye bir kişi olmak üzere on iki temsilci tâyin etmiştik. Allah şöyle buyurmuştu: 'Ben elbette sizinle beraberim. Şayet namazı dosdoğru kılar, zekâtı verir, peygamberlerime inanır, onları bütün gücünüzle destekler ve Allah rızâsı için güzel bir borç verirseniz ben de mutlaka sizin günahlarınızı bağışlar ve sizi altlarından ırmaklar akan cennetlere yerleştiririm. Artık bundan sonra hanginiz inkâra saplanırsa, dümdüz yolun ortasında kesinlikle sapıtmış olur.'\"", source: "Mâide / 12. Ayet" },
+      { text: "\"Sizin dostunuz ancak Allah, O’nun Peygamberi, bir de Allah’a tam boyun eğerek namazı dosdoğru kılan ve zekâtı veren mü’min­lerdir.\"", source: "Mâide / 55. Ayet" },
+      { text: "\"Siz ezan okuyup namaza dâvette bulunduğunuz zaman onu alay ve eğlence konusu yaparlar. Çünkü onlar, akletmeyen ve gerçeği anlamayan bir topluluktur.\"", source: "Mâide / 58. Ayet" },
+      { text: "\"Hiç şüphesiz şeytan içki ve kumar yoluyla sizin aranıza ancak düşmanlık ve kin bırakmak, sizi Allah’ı zikretmekten ve namaz kılmaktan alıkoymak ister. Artık bunlardan vazgeçtiniz, değil mi?\"", source: "Mâide / 91. Ayet" },
+      { text: "\"Ey iman edenler! Birinize ölüm gelip çattığı zaman vasiyet esnâsında sizden adâletli iki kişi; şâyet ölüm musîbeti yolculuk yaparken sizi yakalarsa sizden olmayanlardan iki kişi aranızda şâhitlik yapsın. Eğer şâhitlerden şüphelenirseniz, namazdan sonra onları alıkoyun ve kendilerine şöyle yemin ettirin: 'Vallahi, akrabamız bile olsa biz yeminimizi hiçbir menfaat karşılığında satmayız ve Allah’ın emâneti olan bu şâhitliği de asla gizlemeyiz. Böyle yaparsak mutlaka günahkârlardan oluruz.'\"", source: "Mâide / 106. Ayet" },
+      { text: "\"Yine bize: Namazı dosdoğru kılın ve Allah’a karşı gelmekten sakının, diye emredildi. O Allah ki, sonunda O’nun huzurunda toplanacaksınız.\"", source: "En'âm / 72. Ayet" },
+      { text: "\"İşte bu Kur’an, kendinden önceki kitapları doğrulayan, şehirlerin anası olan Mekke halkını ve çevresinde bulunan herkesi uyarman için indirdiğimiz feyiz ve bereket kaynağı bir kitaptır. Âhirete inananlar ona da inanır ve namazlarını vaktinde dosdoğru kılmaya devam ederler.\"", source: "En'âm / 92. Ayet" },
+      { text: "\"De ki: 'Şüphesiz benim namazım, bütün ibâdetlerim, hayatım ve ölümüm, Âlemlerin Rabbi Allah içindir.'\"", source: "En'âm / 162. Ayet" },
+      { text: "\"Rabbinize yalvara yakara ve gizlice dua edin. Çünkü O, aşırı gidenleri sevmez.\"", source: "A'râf / 55. Ayet" },
+      { text: "\"Kitaba sımsıkı sarılanlar ve namazı dosdoğru kılanlara gelince, şüphesiz ki biz, hem kendilerinin, hem de toplumun ıslahına adanmışların mükâfatını asla zâyi etmeyiz.\"", source: "A'râf / 170. Ayet" },
+      { text: "\"Rabbini sabah akşam içten içe, boyun büküp yalvara yakara, derin bir ürpertiyle ve ancak kendin işitebileceğin bir sesle zikret! Sakın gâfillerden olma!\"", source: "A'râf / 205. Ayet" },
+      { text: "\"Onlar namazlarını dosdoğru kılarlar, kendilerine verdiğimiz nimetlerden Allah yolunda harcarlar.\"", source: "Enfâl / 3. Ayet" },
+      { text: "\"Onların Kâbe’deki ibâdetleri, ıslık çalmak ve el çırpmaktan başka bir şey değildir. Öyleyse inkâr etmenizden dolayı tadın azabı!\"", source: "Enfâl / 35. Ayet" },
+      { text: "\"O haram aylar sona erince müşrikleri bulduğunuz yerde öldürün, onları yakalayın, esir edin, geçebilecekleri bütün yolları ve geçitleri tutup kendilerini kontrol altında bulundurun. Eğer şirkten vazgeçer, namazı kılar ve zekâtı verirlerse yollarını serbest bırakın. Şüphesiz Allah, çok bağışlayıcıdır, engin merhamet sahibidir.\"", source: "Tevbe / 5. Ayet" },
+      { text: "\"Her şeye rağmen eğer tevbe edip yaptıklarından vazgeçer, namazı kılar ve zekâtı verirlerse, bu takdirde onlar sizin din kardeşlerinizdir. Biz, bilip anlayacak kimseler için âyetleri böyle ayrıntılarıyla açıklıyoruz.\"", source: "Tevbe / 11. Ayet" },
+      { text: "\"Allah’ın mescitlerini ancak Allah’a ve âhiret gününe inanan, namazı dosdoğru kılan, zekâtı veren ve sadece Allah’tan korkan kimseler gerçek mânada îmâr edebilir. Doğru yola ermiş olmaları umulanlar işte bunlardır.\"", source: "Tevbe / 18. Ayet" },
+      { text: "\"Onların yaptığı bağışların kabul edilmesine engel olan şey, Allah’ı ve Rasûlü’nü inkâr etmeleri, namaza tembel tembel gelmeleri ve bağışlarını gönülsüz olarak zorlana zorlana yapmalarıdır.\"", source: "Tevbe / 54. Ayet" },
+      { text: "\"Mü’min erkekler ve mü’min kadınlar birbirlerinin dostu ve yardımcısıdırlar. İyiliği emir ve tavsiye eder, kötülüklerin önünü almaya çalışırlar. Namazı dosdoğru kılar, zekâtı verir, Allah’a ve Rasûlü’ne itaat ederler. İşte onlar, kendilerine Allah’ın merhametle muâmele edeceği seçkin kimselerdir. Şüphesiz ki Allah, kudreti dâimâ üstün gelen, her işi ve hükmü hikmetli ve sağlam olandır.\"", source: "Tevbe / 71. Ayet" },
+      { text: "\"Onlardan ölen hiç kimsenin cenâze namazını kılma ve hakkında dua etmek maksadıyla kabrinin başında da durma. Çünkü onlar Allah ve Rasûlü’nü inkâr etmişler ve yoldan çıkmış kimseler olarak ölmüşlerdir.\"", source: "Tevbe / 84. Ayet" },
+      { text: "\"Mûsâ ve kardeşine şöyle vahyettik. 'Mısır’da kavminiz için evler hazırlayın. Bu evlerinizi birbirleriyle irtibatlı, topluca namaz kılınacak ortak mekânlar ve toplantılarınızın yapılacağı merkezî yerler hâline getirin. Namazlarınızı da bu evlerde cemaatle ve dosdoğru kılın. Ey Mûsâ, mü’minleri müjdele!'\"", source: "Yunus / 87. Ayet" },
+      { text: "\"Dediler ki: 'Ey Şuayb! Atalarımızın tapageldiği putlarımızı bir yana bırakmamızı veya bizzat kendi mallarımızı dilediğimiz gibi kullanmaktan vazgeçmemizi sana namazın mı emrediyor? Bunu senden beklemezdik. Çünkü sen yumuşak huylu, vakur, aklı başında bir adamsın.'\"", source: "Hûd / 87. Ayet" },
+      { text: "\"Gündüzün iki tarafında ve gecenin gündüze yakın saatlerinde namazı dosdoğru kıl. Şüphesiz ki iyilikler kötülükleri giderir. Bu buyruklar, ibret ve öğüt almasını bilenlere bir hatırlatmadır.\"", source: "Hûd / 114. Ayet" },
+      { text: "\"Onlar, Rablerinin rızâsını kazanmak için her türlü sıkıntıya sabreder, namazı dosdoğru kılar, kendilerine verdiğimiz rızıklardan gizlice ve açıktan Allah yolunda harcar, kötülüğü iyilik yaparak kendilerinden uzaklaştırırlar. Dünyanın sonunda güzel bir hayat işte böyle kimseleri beklemektedir.\"", source: "Ra'd / 22. Ayet" },
+      { text: "\"Rasûlüm! İman eden kullarıma söyle: İçinde hiçbir alışverişin bulunmadığı, dostluğun fayda vermediği o dehşetli kıyâmet günü gelip çatmadan namazlarını dosdoğru kılsınlar ve kendilerine verdiğimiz rızıklardan Allah yolunda gizlice ve açıktan harcasınlar!\"", source: "İbrahim / 31. Ayet" },
+      { text: "\"Rabbimiz! Ben zürriyetimden bir kısmını senin her türlü hürmete lâyık Mukaddes Evin’in yanında ekin bitmeyen bir vâdiye yerleştirdim. Rabbimiz, namazı dosdoğru kılsınlar diye böyle yaptım. Sen de insanlardan bir kısmının gönlünü onlara yönlendir ve onları çeşitli ürünlerle rızıklandır ki sana şükretsinler.\"", source: "İbrahim / 37. Ayet" },
+      { text: "\"Rabbim! Beni ve zürriyetimi namazı dosdoğru kılanlardan eyle! Rabbimiz dualarımızı kabul buyur!\"", source: "İbrahim / 40. Ayet" },
+      { text: "\"Güneşin öğleyin batıya doğru kaydığı andan gece karanlığı bastırıncaya kadar belli vakitlerde namazı dosdoğru kıl; özellikle sabah namazını da kıl, çünkü sabah namazı şâhitlidir.\"", source: "İsrâ / 78. Ayet" },
+      { text: "\"Gecenin bir kısmında uyanıp sana mahsus bir ibâdet olmak üzere teheccüd namazı kıl. Böyle yaptığın takdirde umulur ki Rabbin seni Makâm-ı Mahmûd’a eriştirir.\"", source: "İsrâ / 79. Ayet" },
+      { text: "\"De ki: 'İster Allah diyerek, isterse Rahmân diyerek yalvarın. Hangisiyle yalvarırsanız olur; çünkü en güzel isimler O’nundur.' Sen de namazında, niyâzında sesini fazla yükseltme, büsbütün de kısma, ikisi arasında orta bir yol tut.\"", source: "İsrâ / 110. Ayet" },
+      { text: "\"Nerede olursam olayım beni hayır ve bereket sebebi kıldı. Hayatta kaldığım müddetçe bana namazı ve zekâtı emretti.\"", source: "Meryem / 31. Ayet" },
+      { text: "\"Ailesi başta olmak üzere halkına namaz kılmayı ve zekât vermeyi emrederdi. O, Rabbinin rızâsına ermiş seçkin bir kuldu.\"", source: "Meryem / 55. Ayet" },
+      { text: "\"Ama onlardan sonra öyle kötü bir nesil geldi ki, namazı terk ettiler ve şehvetlerinin ardına düştüler. Bunlar, helâk çukuruna düşerek yaptıkları bu azgınlıkların cezasını göreceklerdir.\"", source: "Meryem / 59. Ayet" },
+      { text: "\"Sen sözü açıktan söylemiş olsan da gizli söylemiş olsan da Allah için birdir; çünkü O gizliyi de, gizlinin gizlisini de bilir.\"", source: "Tâ-Hâ / 7. Ayet" },
+      { text: "\"Şüphesiz ben Allahım. Benden başka ilâh yoktur. Öyleyse yalnız bana kulluk et, beni anmak için de namaz kıl!\"", source: "Tâ-Hâ / 14. Ayet" },
+      { text: "\"Rasûlüm! Sen onların alay ve inkâr dolu sözlerine sabret! Güneş doğmadan ve batmadan önce Rabbini överek tesbih et. Gecenin bazı saatlerinde ve gündüzün bazı vakitlerinde de tesbihine devam et ki, Rabbinin hoşnutluğuna eresin.\"", source: "Tâ-Hâ / 130. Ayet" },
+      { text: "\"Ailene ve ümmetine namazı emret. Kendin de onu kılmaya sabırla devam et. Biz senden rızık istemiyoruz; üstelik seni de biz rızıklandırıyoruz. İyi bilin ki, hayırlı son, kalpleri Allah’a saygı ile dopdolu olup günahlardan sakınan ve ilâhî buyruklara uyanların olacaktır.\"", source: "Tâ-Hâ / 132. Ayet" },
+      { text: "\"Biz onları, emrimizle insanlara doğru yolu gösteren önderler yaptık. Onlara hayırlı işler yapmayı, namazı dosdoğru kılmayı ve zekâtı vermeyi emrettik. Onlar, kendilerini sadece bize kulluğa adamış kimselerdi.\"", source: "Enbiyâ / 73. Ayet" },
+      { text: "\"Biz her ümmete bir kurban ibâdeti belirledik ki, kendilerine rızık olarak verdiğimiz hayvanları kurban ederken üzerlerine Allah’ın adını ansınlar. Şunu iyi bilin ki, sizin ilâhınız tek bir ilâhtır; öyleyse artık O’na teslim olun. Rasûlüm! Tam bir ihlâs, samimiyet ve tevazu içinde Allah’a boyun eğen kulları müjdele!\"", source: "Hac / 34. Ayet" },
+      { text: "\"Onlar ki, yanlarında Allah anıldığı zaman kalpleri derin bir saygıyla ürperir, başlarına gelen musibetlere sabreder, namazı dosdoğru kılar ve kendilerine verdiğimiz rızıklardan bir kısmını Allah yolunda harcarlar.\"", source: "Hac / 35. Ayet" },
+      { text: "\"Allah’ın dinine yardım eden o mü’minler, kendilerine yeryüzünde bir hâkimiyet verdiğimizde, namazlarını dosdoğru kılarlar, zekâtlarını verirler, her türlü iyiliği emredip yayar, kötülük ve yanlışlıkları yasaklayıp önünü almaya çalışırlar. Bütün işlerin neticede varıp değerlendirileceği yer Allah’ın huzurudur.\"", source: "Hac / 41. Ayet" },
+      { text: "\"Allah yolunda gerektiği şekilde cihâd edin. O sizi bunun için seçti ve dîni yaşama konusunda üzerinize hiçbir zorluk yüklemedi. Haydin, atanız İbrâhim’in dinine uyun. Allah, önceki kitaplarda da, Kur’an’da da sizi 'müslümanlar' olarak isimlendirdi. Tâ ki, İslâm’a bağlılığınız hususunda Peygamber size şâhit olsun, siz de diğer insanlara şâhit olasınız. Öyleyse namazı dosdoğru kılın, zekâtı verin ve Allah’ın dinine sarılın. O sizin Mevlânızdır. O ne güzel Mevlâ, ne güzel yardımcıdır!\"", source: "Hac / 78. Ayet" },
+      { text: "\"Onlar namazlarında tam bir tevazu, teslimiyet ve derin bir saygı içindedirler.\"", source: "Mü'minûn / 2. Ayet" },
+      { text: "\"Onlar namazlarını vaktinde, bütün şartları ve rükünleriyle birlikte kılar, hiç geçirmezler.\"", source: "Mü'minûn / 9. Ayet" },
+      { text: "\"O erler ki, ne ticâret ne de alış veriş onları Allah’ı zikretmekten, namazı dosdoğru kılmaktan ve zekâtı vermekten alıkoyabilir. Onlar, kalplerin halden hâle girip alt üst olacağı ve gözlerin dehşetten donakalacağı bir günden korkarlar.\"", source: "Nûr / 37. Ayet" },
+      { text: "\"Öyleyse, namazı dosdoğru kılın, zekâtı verin ve Peygamber’e itaat edin ki Allah’ın rahmetine erişesiniz.\"", source: "Nûr / 56. Ayet" },
+      { text: "\"Ey iman edenler! Elinizin altında bulunan köleleriniz, câriyeleriniz ve henüz ergenlik çağına girmemiş çocuklarınız şu üç vakitte yanınıza girmek için sizden izin istesinler: Sabah namazından önce, öğleyin elbiselerinizi çıkarıp istirahata çekildiğiniz vakit ve yatsı namazından sonra. Çünkü bu üç vakit, sizin mahrem halde bulunabileceğiniz zamanlardır. Bu vakitlerin dışında, izinsiz olarak yanınıza girmelerinde ne size ne de onlara bir günah yoktur. Çünkü, ev içinde kaçınılmaz olarak birbirinizin yanına girip çıkmak durumundasınız. Allah size âyetlerini işte böyle açıklamaktadır. Allah herşeyi hakkıyla bilen, her hükmü ve işi hikmetli ve sağlam olandır.\"", source: "Nûr / 58. Ayet" },
+      { text: "\"Düşünüp öğüt almak, bir de Rabbine şükretmek isteyenler için geceyle gündüzü peş peşe getiren de O’dur.\"", source: "Furkan / 62. Ayet" },
+      { text: "\"Rahmân’ın has kulları onlardır ki, yeryüzünde tevazu ve vakar ile yürürler; kendini bilmez kimseler onlara laf attığında incitmeksizin 'Selâmetle!' derler, geçerler.\"", source: "Furkan / 63. Ayet" },
+      { text: "\"Gecelerini Rablerine secde ederek ve O’nun huzurunda kıyâma durarak geçirirler.\"", source: "Furkan / 64. Ayet" },
+      { text: "\"O, mü’minlere doğru yolu gösteren bir rehber ve büyük bir müjdedir.\"", source: "Neml / 2. Ayet" },
+      { text: "\"Onlar ki namazı dosdoğru kılarlar, zekâtı verirler ve âhiretin varlığına da kesin olarak iman ederler.\"", source: "Neml / 3. Ayet" },
+      { text: "\"Rasûlüm! Sana kitaptan ne vahyediliyorsa onu okuyup başkalarına da anlat. Namazı da dosdoğru kıl! Çünkü bütün şartlarına riâyet edilerek hakkıyla kılınan namaz, insanı her türlü hayasızlıktan, dînin ve aklın kabul etmediği şeylerden alıkoyar. Allah’ı zikretmek ise en büyük ibâdettir. Allah, bütün yaptıklarınızı bilir.\"", source: "Ankebût / 45. Ayet" },
+      { text: "\"Bâtıl şeylerden yüz çevirerek hepiniz tüm benliğinizle sadece Allah’a yönelin, O’na karşı gelmekten sakının, namazı dosdoğru kılın ve Allah’a ortak koşanlardan olmayın.\"", source: "Rûm / 31. Ayet" },
+      { text: "\"İnsanların malları içinde artacağını düşünerek fâize verdiğiniz para, zâhiren artar gibi gözükse de, Allah katında artmaz. Oysa Allah’ın rızâsını isteyerek karşılıksız verdiğiniz zekât cinsinden şeylere gelince, işte böyle yapanlar, mal ve sevaplarını kat kat artıranların tâ kendileridir.\"", source: "Rûm / 39. Ayet" },
+      { text: "\"Onlar namazı dosdoğru kılar, zekâtı verir, âhirete de tam ve kesin bir şekilde inanırlar.\"", source: "Lokman / 4. Ayet" },
+      { text: "\"İşte Rablerinin gösterdiği yolda yürüyenler onlardır, kurtuluşa erecek olanlar da yalnızca onlardır.\"", source: "Lokman / 5. Ayet" },
+      { text: "\"Evlâdım! Namazı dosdoğru kıl, iyiliği emret, kötülükten sakındır ve bu uğurda başına gelecek musîbetlere sabret. Çünkü bunlar azim ve kararlılık gerektiren mühim işlerdir.\"", source: "Lokman / 17. Ayet" },
+      { text: "\"Bizim âyetlerimize ancak şu kimseler iman ederler ki, o âyetlerle kendilerine öğüt verildiği zaman, hiçbir büyüklük duygusuna kapılmadan derhal yüzleri üzere secdeye kapanır ve Rablerini övgülerle anıp tesbih ederler.\"", source: "Secde / 15. Ayet" },
+      { text: "\"Geceleyin yanları yataklardan uzaklaşır, azâbından korkup rahmetini umarak Rablerine yalvarırlar ve kendilerine verdiğimiz rızıklardan Allah yolunda harcarlar.\"", source: "Secde / 16. Ayet" },
+      { text: "\"Dışarı çıkmanızı gerektiren zarurî bir sebep olmadıkça evlerinizde ağırbaşlılıkla oturun. Mecburi bir iş için çıkmanız gerektiğinde ise, eski câhiliye devri kadınlarının yaptığı gibi, süslerinizi ve câzibenizi dışarı vurarak çıkmayın. Namazı dosdoğru kılın, zekâtı verin, Allah ve Rasûlü’ne itaat edin. Ey Peygamber’in şerefli hâne halkı! Allah bu emirleriyle sizden her türlü kiri gidermek ve sizi tertemiz kılmak istiyor.\"", source: "Ahzâb / 33. Ayet" },
+      { text: "\"Ey iman edenler! Allah’ı çok çok zikredin.\"", source: "Ahzâb / 41. Ayet" },
+      { text: "\"Sabah akşam O’nu tesbih edin.\"", source: "Ahzâb / 42. Ayet" },
+      { text: "\"Hiçbir günahkâr, başkasının günahını yüklenmez ve onunla yargılanmaz. Ağır bir günah yükü altında ezilen kimse, yükünü taşımak için başkasını yardıma çağırsa, bu çağırdığı kimse akrabası bile olsa, onun günahından en küçük bir şey yüklenemez. Sen ancak görmedikleri halde Rablerinden korkan ve namazı dosdoğru kılan kimseleri uyarabilirsin. Artık kim günahlarından temizlenirse kendi iyiliğine temizlenmiş olur. Nihâî dönüş yalnız Allah’a olacaktır.\"", source: "Fâtır / 18. Ayet" },
+      { text: "\"Allah’ın kitabını gerektiği gibi okuyan, namazı dosdoğru kılan ve kendilerine verdiğimiz rızıklardan Allah yolunda gizli açık harcayanlar, asla zarara uğramayacak bir ticâreti ümit edebilirler.\"", source: "Fâtır / 29. Ayet" },
+      { text: "\"Onlar Rablerinin çağrısına uyarlar ve namazı dosdoğru kılarlar. Aralarındaki işlerini istişâre ederek yürütürler. Kendilerine verdiğimiz rızıklardan da Allah yolunda harcarlar.\"", source: "Şûrâ / 38. Ayet" },
+      { text: "\"O halde Rasûlüm, onların alay ve hakaret dolu sözlerine sabret; gerek güneşin doğuşundan önce, gerek batışından önce Rabbini övgüyle tesbih et!\"", source: "Kaf / 39. Ayet" },
+      { text: "\"Gecenin bir bölümünde ve secdelerin ardından da O’nu tesbih et.\"", source: "Kaf / 40. Ayet" },
+      { text: "\"Gönülleri Allah’a karşı saygıyla dopdolu olup O’na itaatsizlikten sakınan ve güçleri ölçüsünde O’nun emirlerini yerine getirmeye çalışanlar, cennetlerde ve pınar başlarında olacaklardır.\"", source: "Zâriyât / 15. Ayet" },
+      { text: "\"Rablerinin kendilerine bahşedeceği her türlü nimeti alacaklardır. Çünkü onlar daha önce iyilik eden ve yaptığı işi güzel yapan kimselerdi.\"", source: "Zâriyât / 16. Ayet" },
+      { text: "\"Geceleri pek az uyurlardı.\"", source: "Zâriyât / 17. Ayet" },
+      { text: "\"Seher vakitleri de Allah’tan bağışlanma dilerlerdi.\"", source: "Zâriyât / 18. Ayet" },
+      { text: "\"Peygamberle gizli ve özel görüşmeden önce muhtaçlara sadaka verdiğiniz takdirde fakirliğe düşeceğiz diye korktunuz mu? Mademki siz bunu yapmadığınız takdirde Allah sizi bağışladı; öyleyse siz de artık namazı dosdoğru kılın, zekâtı verin, Allah ve Rasûlü’ne itaat edin. Zira Allah, bütün yaptıklarınızdan haberdardır.\"", source: "Mücâdele / 13. Ayet" },
+      { text: "\"Ey iman edenler! Cuma günü namaz için ezan okunduğunda hemen Allah’ı anmaya koşun; işi, alış verişi bırakın! Eğer bilirseniz sizin için hayırlı olan budur.\"", source: "Cum'a / 9. Ayet" },
+      { text: "\"Namaz tamamlanınca artık yeryüzüne yayılabilir ve Allah’ın lutf u kereminden rızkınızı temine çalışabilirsiniz. Bununla birlikte Allah’ı çok çok zikredin ki iki cihanda da kurtuluşa eresiniz.\"", source: "Cum'a / 10. Ayet" },
+      { text: "\"Ancak namazı hakkıyla kılanlar böyle değildir.\"", source: "Meâric / 22. Ayet" },
+      { text: "\"Onlar namazlarında devamlıdırlar.\"", source: "Meâric / 23. Ayet" },
+      { text: "\"Onlar, bütün şartları ve rükünleriyle birlikte namazlarını vaktinde kusursuz olarak kılar ve hiç geçirmezler.\"", source: "Meâric / 34. Ayet" },
+      { text: "\"Rasûlüm! Rabbin, senin gecenin üçte ikisine yakın kısmını, bazan yarısını, bazan da üçte birini ibâdetle geçirdiğini, beraberindeki mü’minlerden bir kısmının da böyle yaptığını elbette biliyor. Geceyi ve gündüzü yaratıp sürelerini takdir eden Allah’tır. O, gece ibâdetini gerektiği şekilde yapamayacağınızı bildiği için size lutuf ve merhametiyle muâmele edip, kolaylaştırmaya gitti. Artık Kur’an’dan kolayınıza gelen miktarı okuyun. Allah şunu da biliyor ki, içinizden hastalar olacak; bir kısmınız Allah’ın lutfundan nasibini aramak üzere yeryüzünde dolaşacak; bir kısmınız da Allah yolunda savaşacak. Bundan böyle Kur’an’dan kolayınıza gelen miktarı okuyun, namazı dosdoğru kılın, zekâtı verin, bir de Allah’a gönül hoşluğuyla güzel bir borç verin. Kendiniz için iyilik olarak önden ne gönderirseniz, Allah katında onu daha hayırlı ve mükâfatı kat kat artmış olarak bulursunuz. Günahlarınız için Allah’tan bağışlanma dileyin. Şüphesiz Allah, çok bağışlayıcıdır, sonsuz merhamet sahibidir.\"", source: "Müzzemmil / 20. Ayet" },
+      { text: "\"Onlar da şöyle cevap verirler: 'Biz namaz kılanlardan değildik.'\"", source: "Müddessir / 43. Ayet" },
+      { text: "\"O kişi dünyada ne dini doğrular, ne de namaz kılardı.\"", source: "Kıyamet / 31. Ayet" },
+      { text: "\"Sabah akşam Rabbinin ismini an.\"", source: "İnsan / 25. Ayet" },
+      { text: "\"Gecenin bir kısmında O’na secde et ve geceleyin uzun bir süre O’nu tesbihte bulun.\"", source: "İnsan / 26. Ayet" },
+      { text: "\"Rabbinin ismini anıp namaz kılan.\"", source: "A'lâ / 15. Ayet" },
+      { text: "\"Namaza durduğu zaman bir kulu?\"", source: "Alak / 10. Ayet" },
+      { text: "\"Halbuki onlara da ancak, taat ve ibâdeti yalnızca Allah’a has kılıp sadece O’nun rızâsını hedef alarak, bâtıl dinleri terk edip dupduru bir tevhid inancı içinde sadece Allah’a kulluk etmeleri, namazı dosdoğru kılmaları ve zekâtı vermeleri emredilmişti. İşte sağlam, dosdoğru ve kıyâmete kadar bâkî kalacak din budur!\"", source: "Beyyine / 5. Ayet" },
+      { text: "\"Hayır! Hayır! Elbette yakında bileceksiniz.\"", source: "Tekâsür / 4. Ayet" },
+      { text: "\"Hayır! Eğer gerçeği kesin bir bilgiyle bilseydiniz böyle yapmaya cür’et edemezdiniz!\"", source: "Tekâsür / 5. Ayet" },
+      { text: "\"Siz, o kızgın alevli cehenemi mutlaka göreceksiniz.\"", source: "Tekâsür / 6. Ayet" },
+      { text: "\"Yazıklar olsun şöyle namaz kılanlara ki,\"", source: "Mâûn / 4. Ayet" },
+      { text: "\"Onlar namazlarını gafletle kılar, ona gereken önemi vermezler.\"", source: "Mâûn / 5. Ayet" },
+      { text: "\"Sen de Rabbin için namaz kıl ve kurban kes!\"", source: "Kevser / 2. Ayet" }
     ];
     // YENİ EKLENEN: RASTGELE AYET GÖSTERME FONKSİYONU
     function displayDailyVerse() {
@@ -446,6 +803,28 @@
     window.closeDeletedMosquesModal = function() {
       document.getElementById('deletedMosquesModal').classList.add('hidden');
     };
+    // === KULLANIM ŞARTLARI MODALI ===
+    window.openTermsModal = function() {
+      document.getElementById('termsModal').classList.remove('hidden');
+      document.getElementById('termsModal').querySelector('.overflow-y-auto').scrollTop = 0;
+    };
+    window.closeTermsModal = function() {
+      document.getElementById('termsModal').classList.add('hidden');
+    };
+    window.switchTermsLang = function(lang) {
+      const trBtn = document.getElementById('termsLangTrBtn');
+      const enBtn = document.getElementById('termsLangEnBtn');
+      const trContent = document.getElementById('termsContentTr');
+      const enContent = document.getElementById('termsContentEn');
+      const isTr = lang === 'tr';
+      trContent.classList.toggle('hidden', !isTr);
+      enContent.classList.toggle('hidden', isTr);
+      trBtn.classList.toggle('active', isTr);
+      enBtn.classList.toggle('active', !isTr);
+      trBtn.style.color = isTr ? '' : 'rgba(255,255,255,0.8)';
+      enBtn.style.color = isTr ? 'rgba(255,255,255,0.8)' : '';
+      window.haptic(6);
+    };
     function renderDeletedMosquesList() {
       const list = getDeletedPresetMosques();
       const container = document.getElementById('deletedMosquesList');
@@ -536,10 +915,10 @@
     };
     // === PROFIL FOTOGRAFI VE ISIM YONETIMI ===
     function loadProfileData() {
-      const savedName = localStorage.getItem('manevi-atlas-username') || 'Ümit Özgüler';
+      const savedName = localStorage.getItem('manevi-atlas-username') || 'Ziyaretçi';
       const savedPhoto = localStorage.getItem('manevi-atlas-userphoto');
 
-      document.getElementById('profileNameInput').value = savedName;
+      document.getElementById('profileNameInput').value = localStorage.getItem('manevi-atlas-username') || '';
       updateNameDisplays(savedName);
 
       if (savedPhoto) {
@@ -549,8 +928,9 @@
       }
 
       updateOwnProfileHint();
+      updateHeroPersonalizeHint();
     }
-    // Kullanıcı henüz kendi adını/fotoğrafını eklememişse (varsayılan "Ümit Özgüler" profili duruyorsa)
+    // Kullanıcı henüz kendi adını/fotoğrafını eklememişse (varsayılan "Ziyaretçi" profili duruyorsa)
     // ve banner'ı daha önce kapatmadıysa, kendi profilini oluşturması için uyarı göster.
     function updateOwnProfileHint() {
       const banner = document.getElementById('ownProfileHintBanner');
@@ -567,18 +947,38 @@
         banner.classList.remove('flex');
       }
     }
+    // Dashboard'daki "Hoş geldiniz, Ziyaretçi" karşılamasının altında, kullanıcı
+    // kendi adını/fotoğrafını eklemediği sürece kısa bir kişiselleştirme uyarısı gösterir.
+    function updateHeroPersonalizeHint() {
+      const hint = document.getElementById('heroPersonalizeHint');
+      if (!hint) return;
+      const hasOwnName = !!localStorage.getItem('manevi-atlas-username');
+      const hasOwnPhoto = !!localStorage.getItem('manevi-atlas-userphoto');
+      hint.classList.toggle('hidden', hasOwnName || hasOwnPhoto);
+    }
     window.dismissOwnProfileHint = function() {
       localStorage.setItem('manevi-atlas-own-profile-hint-dismissed', '1');
       updateOwnProfileHint();
     };
     window.saveProfileName = function(name) {
-      const val = name.trim() || 'Seyyah';
+      const val = name.trim();
+      if (val === '') {
+        // Kullanıcı ismini tamamen silerse, "Ziyaretçi" varsayılan durumuna geri dön.
+        localStorage.removeItem('manevi-atlas-username');
+        updateNameDisplays('Ziyaretçi');
+        if (!localStorage.getItem('manevi-atlas-userphoto')) updateInitials('Ziyaretçi');
+        updateOwnProfileHint();
+        updateHeroPersonalizeHint();
+        showToast("Profil ismi sıfırlandı.", "success");
+        return;
+      }
       localStorage.setItem('manevi-atlas-username', val);
       updateNameDisplays(val);
       if (!localStorage.getItem('manevi-atlas-userphoto')) {
         updateInitials(val);
       }
       updateOwnProfileHint();
+      updateHeroPersonalizeHint();
       showToast("Profil ismi kaydedildi.", "success");
     }
     function updateNameDisplays(name) {
@@ -587,13 +987,14 @@
       if(document.getElementById('profileStatsName')) document.getElementById('profileStatsName').textContent = name;
     }
     function updateInitials(name) {
-      let initials = "S";
-      if(name && name.trim() !== "") {
+      const hasOwnName = !!localStorage.getItem('manevi-atlas-username');
+      let initials = "";
+      if (hasOwnName && name && name.trim() !== "") {
          const parts = name.trim().split(' ');
          if(parts.length > 1) initials = parts[0][0] + parts[parts.length-1][0];
          else initials = parts[0].substring(0,2);
+         initials = initials.toUpperCase();
       }
-      initials = initials.toUpperCase();
       if(document.getElementById('headerInitials')) document.getElementById('headerInitials').textContent = initials;
       if(document.getElementById('profileInitials')) document.getElementById('profileInitials').textContent = initials;
     }
@@ -605,6 +1006,7 @@
           localStorage.setItem('manevi-atlas-userphoto', base64Data);
           setProfileImages(base64Data);
           updateOwnProfileHint();
+          updateHeroPersonalizeHint();
           showToast("Profil fotoğrafı güncellendi!", "success");
         } catch (err) {
           showToast("Fotoğraf yüklenemedi. Lütfen tekrar deneyin.", "error");
@@ -632,6 +1034,10 @@
       loadFavorites();
       loadRatings();
       loadGeocodeCache();
+      // Harita modalı henüz açılmadan, statik koordinat matrisini (mosques-geo.json)
+      // arka planda ön-yükle. Kullanıcı haritayı ilk kez açtığında bu istek
+      // büyük ihtimalle zaten tamamlanmış olur → sıfır gecikmeyle açılış.
+      if (typeof prefetchMosqueGeoMatrix === 'function') prefetchMosqueGeoMatrix();
       // Sayfa yenilendiğinde tarayıcının eski arama kutusu değerini geri getirmesini
       // (form restore) önlemek için arama kutusunu ve filtreyi başlangıç durumuna sıfırla
       const __searchInputOnInit = document.getElementById('mosqueSearchInput');
@@ -639,6 +1045,7 @@
       activeFilterDistrict = 'HEPSİ';
       initWhatsNewBanner();
       initMosqueInfoHintBanner();
+      checkForAppUpdate(); // Sunucuda daha yeni bir sürüm var mı, sessizce kontrol et
       await loadVisits();
       loadProfileData(); 
       displayDailyVerse(); // <--- YENİ EKLENEN: AÇILIŞTA AYET GÖSTER
@@ -669,6 +1076,39 @@
       updateRecentlyAddedMosquesUI();
       updateFavoriteMosquesUI();
       updateStatsUI();
+      updateHeroBadgeUI();
+      if (typeof updateBackupStatusUI === 'function') updateBackupStatusUI();
+      if (typeof maybeShowBackupReminder === 'function') maybeShowBackupReminder();
+    }
+    // ANA SAYFADA, İSMİN YANINDA GÖSTERİLEN BAŞARI ROZETİ
+    // "Başarı Rozetleri" kartındaki eşiklerle (10 / 25 / 50 / Tümü) birebir
+    // aynı mantığı kullanır: kaç FARKLI cami ziyaret edildiğine bakar ve
+    // ulaşılan en yüksek rozeti isim yanında küçük bir ikon olarak gösterir.
+    function updateHeroBadgeUI() {
+      const el = document.getElementById('heroBadgeIcon');
+      if (!el) return;
+      const totalMosques = PRESET_MOSQUES.length;
+      const visitedMosqueCount = PRESET_MOSQUES.filter(m =>
+        visitsData.some(v => v.mosqueId === m.id)
+      ).length;
+      const milestones = [
+        { count: 10, icon: '🥉', label: 'İlk 10 Cami' },
+        { count: 25, icon: '🥈', label: '25 Cami' },
+        { count: 50, icon: '🥇', label: '50 Cami' },
+        { count: totalMosques, icon: '<svg width="20" height="20" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><circle cx="20" cy="20" r="18" fill="none" stroke="#C39A45" stroke-width="2"/><circle cx="20" cy="20" r="14" fill="#8C6A22"/><path d="M23 12a9 9 0 1 0 0 16 7.2 7.2 0 1 1 0-16Z" fill="#F4E4B8"/><path d="M27.2 17.6l.9 1.9 2.1.3-1.5 1.45.35 2.05-1.85-.97-1.85.97.35-2.05-1.5-1.45 2.1-.3Z" fill="#F4E4B8"/></svg>', label: 'Tüm Camiler Tamamlandı' }
+      ];
+      // En yüksek ulaşılan rozeti bul (eşikler artan sırada olduğu için sondan başa doğru tara)
+      let earned = null;
+      for (let i = milestones.length - 1; i >= 0; i--) {
+        if (visitedMosqueCount >= milestones[i].count) { earned = milestones[i]; break; }
+      }
+      if (earned) {
+        el.innerHTML = earned.icon;
+        el.title = earned.label + ' Kazanıldı';
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
     }
     // DEFTER / İSTATİSTİK GÖRÜNÜM ANAHTARI
     window.switchDefterView = function(view) {
@@ -757,8 +1197,8 @@
               </div>
               <div class="space-y-1 pr-12">
                 <div class="flex items-center space-x-1.5">
-                  <span class="text-[9px] font-bold text-white px-2 py-0.5 rounded font-ledger" style="background:var(--teal-900);">${escapeHtml(v.prayerTime)} Namazı</span>
-                  <span class="text-[9px] font-bold uppercase tracking-wider" style="color:var(--ink-faint);">${escapeHtml(v.district)}</span>
+                  <span class="text-[9px] font-bold text-white px-2 py-0.5 rounded font-ledger" style="background:var(--teal-900);">${escapeHtml(v.prayerTime)}${v.prayerTime === 'Vakit Dışı' ? '' : ' Namazı'}</span>
+                  <span class="text-[9px] font-bold uppercase tracking-wider" style="color:var(--ink-faint);">${v.outOfBursa ? '<i class="fa-solid fa-earth-europe" style="margin-right:3px;"></i>' : ''}${escapeHtml(v.district)}</span>
                 </div>
                 <h3 class="font-bold text-xs mt-1" style="color:var(--ink);">${escapeHtml(v.mosqueName)}</h3>
                 <p class="text-[10px]" style="color:var(--ink-faint);">${formattedDate} - Saat: ${escapeHtml(v.time) || '--:--'}</p>
@@ -1192,6 +1632,19 @@
         displayDailyVerse();
         triggerAllUIUpdates();
         await initPrayerCountdown();
+        // Yenilerken sunucuda yeni bir sürüm olup olmadığını da kontrol et.
+        // Sadece bir banner bırakıp kullanıcının fark etmesini beklemek yerine,
+        // kullanıcı zaten "en güncel bilgiyi getir" niyetiyle aşağı çektiği için
+        // bir güncelleme bulunursa doğrudan uygula: önbellek temizlenir ve sayfa
+        // sıfırdan (en güncel cami/bilgi listesiyle) yeniden yüklenir.
+        const updateAvailable = await checkForAppUpdate();
+        if (updateAvailable) {
+          await minDisplay;
+          ptrRefreshing = false;
+          ptrReset(true);
+          window.applyAppUpdate();
+          return;
+        }
         showToast('Kayıtlar güncellendi.', 'success');
       } catch (e) {
         showToast('Yenileme sırasında bir sorun oluştu.', 'error');
@@ -1245,6 +1698,7 @@
         toast.classList.add('opacity-0', '-translate-y-4');
       }, 3000);
     };
+
     // 16. LIGHTBOX (Fotoğraf Büyütme / Yakınlaştırma / Gezinme)
     let lightboxPhotos = [];
     let lightboxIndex = 0;
@@ -1404,9 +1858,74 @@
       document.getElementById('installBanner').classList.add('hidden');
       showToast('Uygulama ana ekranınıza yüklendi!', 'success');
     });
-    // 18. SERVICE WORKER KAYDI (çevrimdışı açılış desteği)
+    // 17b. ÇEVRİMDIŞI MOD ROZETİ
+    // Tarayıcının navigator.onLine / 'online' / 'offline' sinyallerine göre
+    // üst bardaki rozeti göster/gizle. İnternet giderken normal "Kayıtlar
+    // Hazır" senkron rozetiyle çakışmaması için o rozet geçici olarak gizlenir
+    // (internet gelince tekrar görünür).
+    function updateOfflineModeBadge() {
+      const badge = document.getElementById('offlineModeBadge');
+      const sync = document.getElementById('syncStatus');
+      if (!badge) return;
+      if (navigator.onLine) {
+        badge.classList.add('hidden');
+        badge.classList.remove('flex');
+        if (sync) sync.classList.remove('hidden');
+      } else {
+        badge.classList.remove('hidden');
+        badge.classList.add('flex');
+        if (sync) sync.classList.add('hidden');
+      }
+    }
+    window.addEventListener('online', updateOfflineModeBadge);
+    window.addEventListener('offline', updateOfflineModeBadge);
+    updateOfflineModeBadge();
+
+    // 18. SERVICE WORKER KAYDI (çevrimdışı açılış desteği) + GÜNCELLEME TESPİTİ
+    // Basit "register et ve unut" yerine: yeni bir sürüm sunucuya yüklendiğinde
+    // bunu olabildiğince erken fark edip kullanıcıya güncelleme bandını
+    // gösteriyoruz. Servis çalışanı hazır ("installed") ama henüz devrede
+    // değilse (sayfa hâlâ eski koda bağlıyken), window.__pendingSW olarak
+    // saklıyoruz; kullanıcı "Güncelle"ye basınca ona SKIP_WAITING mesajı
+    // gönderiyoruz (bkz. applyAppUpdate ve sw.js).
+    //
+    // ÖNEMLİ: Site GitHub Pages üzerinden (Fastly CDN) yayınlanıyor ve .htaccess
+    // gibi sunucu taraflı önbellek kurallarına izin vermiyor. Bu yüzden sw.js
+    // dosyasını HER DEPLOY'DA farklı bir ?v= sorgu parametresiyle kaydediyoruz;
+    // tarayıcı/CDN bu tam URL'i daha önce hiç görmediği için önbellek
+    // ne kadar agresif olursa olsun mecburen sıfırdan indirir. CACHE_NAME'i
+    // sw.js içinde artırdığım her seferde bu SW_REGISTER_VERSION'ı da artıracağım.
+    const SW_REGISTER_VERSION = "v37";
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
+        navigator.serviceWorker.register(`sw.js?v=${SW_REGISTER_VERSION}`).then((reg) => {
+          reg.addEventListener('updatefound', () => {
+            const newSW = reg.installing;
+            if (!newSW) return;
+            newSW.addEventListener('statechange', () => {
+              if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                window.__pendingSW = newSW;
+                const banner = document.getElementById('appUpdateBanner');
+                if (banner) banner.classList.remove('hidden');
+              }
+            });
+          });
+          // Uygulama arka plandan öne geldiğinde veya her saat başı, sunucuda
+          // yeni bir sw.js olup olmadığını sessizce kontrol et (bu, kullanıcının
+          // uygulamayı yalnızca ana ekran ikonundan açtığı ve hiç manuel
+          // "Kontrol Et" demediği durumlarda güncellemenin fark edilmesini sağlar).
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update().catch(() => {});
+          });
+          setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+        }).catch(() => {});
+      });
+
+      // Yeni SW devraldığı an (skipWaiting sonrası) sayfayı bir kez yenile.
+      let __swRefreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (__swRefreshing) return;
+        __swRefreshing = true;
+        window.location.reload();
       });
     }
