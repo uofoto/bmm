@@ -915,6 +915,11 @@
     };
     // === PROFIL FOTOGRAFI VE ISIM YONETIMI ===
     function loadProfileData() {
+      // Geofencing Toggle Durumu
+      const geofencingEnabled = localStorage.getItem('manevi-atlas-geofencing-enabled') !== '0';
+      const geofencingToggle = document.getElementById('geofencingToggle');
+      if (geofencingToggle) geofencingToggle.checked = geofencingEnabled;
+
       const savedName = localStorage.getItem('manevi-atlas-username') || 'Ziyaretçi';
       const savedPhoto = localStorage.getItem('manevi-atlas-userphoto');
 
@@ -1048,8 +1053,8 @@
       checkForAppUpdate(); // Sunucuda daha yeni bir sürüm var mı, sessizce kontrol et
       await loadVisits();
       loadProfileData(); 
-      displayDailyVerse(); // <--- YENİ EKLENEN: AÇILIŞTA AYET GÖSTER
-      initPrayerCountdown(); // <--- YENİ EKLENEN: NAMAZ VAKTİ GERİ SAYIMINI BAŞLAT
+      try { displayDailyVerse(); } catch (e) { console.error("Ayet yüklenemedi:", e); }
+      try { initPrayerCountdown(); } catch (e) { console.error("Namaz vakitleri yüklenemedi:", e); }
 
       document.getElementById('appModeBadge').innerHTML = useIndexedDB
         ? '<span style="color:var(--teal-700);">Cihazınızda Güvende</span>'
@@ -1069,6 +1074,9 @@
       }, __remaining);
     }
     function triggerAllUIUpdates() {
+      if (window.__gamification && typeof window.__gamification.checkAllAchievements === 'function') {
+        window.__gamification.checkAllAchievements();
+      }
       updateDashboardUI();
       updateMosquesListUI();
       updateHistoryFeedUI();
@@ -1077,34 +1085,23 @@
       updateFavoriteMosquesUI();
       updateStatsUI();
       updateHeroBadgeUI();
+      if (typeof syncUnvanGuideUI === 'function') syncUnvanGuideUI();
       if (typeof updateBackupStatusUI === 'function') updateBackupStatusUI();
       if (typeof maybeShowBackupReminder === 'function') maybeShowBackupReminder();
     }
-    // ANA SAYFADA, İSMİN YANINDA GÖSTERİLEN BAŞARI ROZETİ
-    // "Başarı Rozetleri" kartındaki eşiklerle (10 / 25 / 50 / Tümü) birebir
-    // aynı mantığı kullanır: kaç FARKLI cami ziyaret edildiğine bakar ve
-    // ulaşılan en yüksek rozeti isim yanında küçük bir ikon olarak gösterir.
+    // ANA SAYFADA, İSMİN YANINDA GÖSTERİLEN UNVAN ROZETİ
+    // Tek gerçek kaynak: stats.js -> getCurrentUnvan(). Profil sekmesindeki unvan
+    // rehberi ve İstatistik sekmesindeki "Mevcut Unvanın" kartıyla her zaman
+    // aynı sonucu gösterir; artık kendi ayrı eşik listesini tutmuyor.
     function updateHeroBadgeUI() {
       const el = document.getElementById('heroBadgeIcon');
-      if (!el) return;
-      const totalMosques = PRESET_MOSQUES.length;
-      const visitedMosqueCount = PRESET_MOSQUES.filter(m =>
-        visitsData.some(v => v.mosqueId === m.id)
-      ).length;
-      const milestones = [
-        { count: 10, icon: '🥉', label: 'İlk 10 Cami' },
-        { count: 25, icon: '🥈', label: '25 Cami' },
-        { count: 50, icon: '🥇', label: '50 Cami' },
-        { count: totalMosques, icon: '<svg width="20" height="20" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><circle cx="20" cy="20" r="18" fill="none" stroke="#C39A45" stroke-width="2"/><circle cx="20" cy="20" r="14" fill="#8C6A22"/><path d="M23 12a9 9 0 1 0 0 16 7.2 7.2 0 1 1 0-16Z" fill="#F4E4B8"/><path d="M27.2 17.6l.9 1.9 2.1.3-1.5 1.45.35 2.05-1.85-.97-1.85.97.35-2.05-1.5-1.45 2.1-.3Z" fill="#F4E4B8"/></svg>', label: 'Tüm Camiler Tamamlandı' }
-      ];
-      // En yüksek ulaşılan rozeti bul (eşikler artan sırada olduğu için sondan başa doğru tara)
-      let earned = null;
-      for (let i = milestones.length - 1; i >= 0; i--) {
-        if (visitedMosqueCount >= milestones[i].count) { earned = milestones[i]; break; }
-      }
-      if (earned) {
-        el.innerHTML = earned.icon;
-        el.title = earned.label + ' Kazanıldı';
+      if (!el || typeof getCurrentUnvan !== 'function') return;
+      const unvan = getCurrentUnvan();
+      if (unvan.current) {
+        el.className = 'leading-none sicil-tag';
+        el.style.color = 'var(--teal-700)';
+        el.textContent = unvan.current.title;
+        el.title = unvan.current.title + ' — ' + unvan.current.desc;
         el.classList.remove('hidden');
       } else {
         el.classList.add('hidden');
@@ -1172,8 +1169,12 @@
 
         let mapBtnHTML = '';
         if (v.address) {
-          const isUrl = v.address.startsWith('http') || v.address.includes('google.com/maps');
-          const targetUrl = isUrl ? v.address : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.mosqueName + ' ' + v.address)}`;
+          const isUrl = (v.address.startsWith('http') || v.address.includes('google.com/maps')) && !v.address.toLowerCase().includes('javascript:');
+          let targetUrl = isUrl ? v.address : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.mosqueName + ' ' + v.address)}`;
+          // URL güvenliği: Sadece http, https veya google maps linklerine izin ver
+          if (isUrl && !targetUrl.startsWith('http') && !targetUrl.startsWith('https')) {
+            targetUrl = '#';
+          }
           mapBtnHTML = `
             <a href="${targetUrl}" target="_blank" rel="noopener" class="inline-flex items-center space-x-1 text-[10px] font-bold px-2 py-1 rounded-lg mt-2 transition-colors" style="background:rgba(21,90,76,0.08); color:var(--teal-900);">
               <i class="fa-solid fa-compass"></i><span class="truncate max-w-[150px]">${isUrl ? 'Konumu Görüntüle' : escapeHtml(v.address)}</span>
@@ -1530,6 +1531,15 @@
       document.getElementById('formTime').value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     }
     // 12. MOBİL SEKME GEÇİŞİ 
+    window.toggleGeofencing = function(enabled) {
+      localStorage.setItem('manevi-atlas-geofencing-enabled', enabled ? '1' : '0');
+      if (window.__geofencing) {
+        if (enabled) window.__geofencing.startTracking();
+        else window.__geofencing.stopTracking();
+      }
+      showToast(enabled ? "Konum asistanı aktif." : "Konum asistanı kapatıldı.", "success");
+    };
+
     window.switchTab = function(index) {
       const isChanging = index !== currentActiveTab;
       if (isChanging) window.haptic(15);
@@ -1895,7 +1905,7 @@
     // tarayıcı/CDN bu tam URL'i daha önce hiç görmediği için önbellek
     // ne kadar agresif olursa olsun mecburen sıfırdan indirir. CACHE_NAME'i
     // sw.js içinde artırdığım her seferde bu SW_REGISTER_VERSION'ı da artıracağım.
-    const SW_REGISTER_VERSION = "v37";
+    const SW_REGISTER_VERSION = "v43";
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register(`sw.js?v=${SW_REGISTER_VERSION}`).then((reg) => {
